@@ -71,7 +71,7 @@ describe('导航', () => {
 
   it('站内链接带 base path，外链保持原样', () => {
     const html = render({ basePath: '/repo' })
-    expect(html).toContain('href="/repo/docs"')
+    expect(html).toContain('href="/repo/docs/"')
     expect(html).toContain('href="https://github.com/x/y"')
     expect(html).not.toContain('/repo/https')
   })
@@ -162,6 +162,33 @@ describe('首页 hero', () => {
   it('未配置 hero 时首页保留正文 H1', () => {
     const html = render({ isHome: true })
     expect(html).toContain('<h1>正文标题</h1>')
+  })
+})
+
+describe('尾斜杠一致性', () => {
+  // 静态托管把 /rules 301 到 /rules/。链接不带斜杠会导致每次点击多一跳，
+  // 且 Google 会把两种形式当作不同 URL，产生重复内容。
+  it('导航站内链接带尾斜杠', () => {
+    const html = render()
+    expect(html).toContain('href="/docs/"')
+  })
+
+  it('外链不加尾斜杠', () => {
+    expect(render()).toContain('href="https://github.com/x/y"')
+  })
+
+  it('子路径部署时品牌链接带尾斜杠', () => {
+    expect(render({ basePath: '/repo' })).toContain('href="/repo/"')
+  })
+
+  it('hero 按钮链接带尾斜杠', () => {
+    const html = renderPage({
+      config: { ...BASE, home: { title: 'T', actions: [{ label: '开始', href: '/start' }] } },
+      basePath: '',
+      title: 't', description: 'd', canonical: 'https://example.com/',
+      lang: 'zh-CN', og: {}, jsonLd: '', body: '', isHome: true,
+    })
+    expect(html).toContain('href="/start/"')
   })
 })
 

@@ -63,6 +63,17 @@ const DEFAULTS: SiteConfig = {
   },
 }
 
+/** 主机名转小写；URL 非法时原样返回，交由后续步骤报错 */
+function normalizeHost(url: string): string {
+  try {
+    const u = new URL(url)
+    u.hostname = u.hostname.toLowerCase()
+    return u.toString().replace(/\/$/, '')
+  } catch {
+    return url
+  }
+}
+
 export function loadConfig(rootDir = process.cwd()): SiteConfig {
   const file = join(rootDir, 'rankloop.config.json')
   let fromFile: Partial<SiteConfig> = {}
@@ -76,7 +87,10 @@ export function loadConfig(rootDir = process.cwd()): SiteConfig {
   }
 
   // 环境变量优先：同一份配置可部署到不同域名，无需改文件
-  const siteUrl = (process.env.SITE_URL ?? fromFile.siteUrl ?? DEFAULTS.siteUrl).replace(/\/$/, '')
+  const rawUrl = (process.env.SITE_URL ?? fromFile.siteUrl ?? DEFAULTS.siteUrl).replace(/\/$/, '')
+  // 主机名转小写：DNS 不区分大小写，但 Google 会把 Example.com 与 example.com
+  // 当作两个 URL，造成重复内容。路径保持原样（路径是大小写敏感的）。
+  const siteUrl = normalizeHost(rawUrl)
 
   return {
     ...DEFAULTS,

@@ -30,7 +30,9 @@ export interface BuildOptions {
 
 export interface PageResult {
   path: string
+  /** 最终 URL（目录索引带尾斜杠），供 sitemap 使用 */
   url: string
+  canonicalPath: string
   title: string
   description: string
   score: number
@@ -56,11 +58,19 @@ export interface BuildResult {
  * 部署在根域名（如 Cloudflare Pages）时 basePath 为空，此函数不做改动。
  */
 function rewriteLinks(html: string, basePath: string): string {
-  if (!basePath) return html
   // 只改写以单个 / 开头的站内链接；// 开头是协议相对的外链，不能动
-  return html
-    .replace(/(<a\b[^>]*\bhref=")\/(?!\/)/g, `$1${basePath}/`)
-    .replace(/(<img\b[^>]*\bsrc=")\/(?!\/)/g, `$1${basePath}/`)
+  let out = html
+  if (basePath) {
+    out = out
+      .replace(/(<a\b[^>]*\bhref=")\/(?!\/)/g, `$1${basePath}/`)
+      .replace(/(<img\b[^>]*\bsrc=")\/(?!\/)/g, `$1${basePath}/`)
+  }
+  // 站内页面链接补尾斜杠：否则每次点击都会触发一次 301
+  return out.replace(
+    /(<a\b[^>]*\bhref="\/[^"#?]*?)(")/g,
+    (m, head: string, tail: string) =>
+      head.endsWith('/') || /\.[a-z0-9]{2,5}$/i.test(head) ? m : `${head}/${tail}`,
+  )
 }
 
 /**
@@ -129,7 +139,11 @@ export function build(options: BuildOptions): BuildResult {
     const raw = readFileSync(file, 'utf8')
     const format = extname(file) === '.html' ? 'html' : 'markdown'
     const urlPath = toUrlPath(file, options.contentDir)
-    const canonical = `${options.siteUrl}${urlPath}`
+    // 目录索引形式的最终 URL：/rules → /rules/。
+    // 静态托管会把无尾斜杠的地址 301 到带斜杠版本，
+    // sitemap 与 canonical 应直接给最终地址，避免让 Google 多跑一跳。
+    const canonicalPath = urlPath === '/' ? '/' : `${urlPath}/`
+    const canonical = `${options.siteUrl}${canonicalPath}`
 
     const parsed = parseContent({ format, body: raw, url: canonical })
 
@@ -151,6 +165,7 @@ export function build(options: BuildOptions): BuildResult {
     const result: PageResult = {
       path: urlPath,
       url: canonical,
+      canonicalPath,
       title: parsed.doc.head.title ?? basename(file),
       description: parsed.doc.head.description ?? '',
       score: check.score,

@@ -9,6 +9,21 @@ import type { SiteConfig } from './config'
  * 与「单容器/零依赖一键部署」冲突。
  */
 
+/**
+ * 站内链接补尾斜杠。
+ *
+ * 静态托管把 /rules 301 到 /rules/，站内链接若不带斜杠，
+ * 每次点击都会多一跳；Google 也会把两种形式视作不同 URL。
+ * 已带斜杠、指向文件（含扩展名）、或外链的地址保持不变。
+ */
+function withTrailingSlash(href: string): string {
+  if (!href.startsWith('/')) return href
+  if (href.endsWith('/')) return href
+  if (/\.[a-z0-9]{2,5}$/i.test(href)) return href
+  if (href.includes('#') || href.includes('?')) return href
+  return `${href}/`
+}
+
 export function escapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')
@@ -74,7 +89,7 @@ function navHtml(config: SiteConfig, basePath: string): string {
   if (config.nav.length === 0) return ''
   const items = config.nav
     .map((n) => {
-      const href = n.href.startsWith('/') ? `${basePath}${n.href}` : n.href
+      const href = withTrailingSlash(n.href.startsWith('/') ? `${basePath}${n.href}` : n.href)
       return `<a href="${escapeHtml(href)}">${escapeHtml(n.label)}</a>`
     })
     .join('')
@@ -87,7 +102,7 @@ function heroHtml(config: SiteConfig, basePath: string): string {
 
   const actions = (hero.actions ?? [])
     .map((a) => {
-      const href = a.href.startsWith('/') ? `${basePath}${a.href}` : a.href
+      const href = withTrailingSlash(a.href.startsWith('/') ? `${basePath}${a.href}` : a.href)
       return `<a href="${escapeHtml(href)}"${a.primary ? ' class="primary"' : ''}>${escapeHtml(a.label)}</a>`
     })
     .join('')
@@ -124,7 +139,7 @@ function demoteBodyH1(body: string): string {
 
 export function renderPage(p: RenderParams): string {
   const { config } = p
-  const brandHref = p.basePath || '/'
+  const brandHref = p.basePath ? `${p.basePath}/` : '/'
   const usesHero = p.isHome && Boolean(config.home?.title)
   const body = usesHero ? demoteBodyH1(p.body) : p.body
 

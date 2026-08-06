@@ -123,7 +123,7 @@ describe('生成的 HTML', () => {
     )
     run()
     const html = readFileSync(join(outDir, 'nocanon/index.html'), 'utf8')
-    expect(html).toContain('href="https://example.com/nocanon"')
+    expect(html).toContain('href="https://example.com/nocanon/"')
   })
 
   it('转义标题中的 HTML，防止注入', () => {
@@ -158,7 +158,7 @@ describe('子路径部署（GitHub Pages）', () => {
     write('good.md', PORTABLE)
     build({ contentDir, outDir, siteUrl: 'https://u.github.io/repo', siteName: 'T' })
     const html = readFileSync(join(outDir, 'good/index.html'), 'utf8')
-    expect(html).toContain('href="/repo/x"')
+    expect(html).toContain('href="/repo/x/"')
     expect(html).toContain('src="/repo/i.png"')
   })
 
@@ -174,7 +174,7 @@ describe('子路径部署（GitHub Pages）', () => {
     write('good.md', GOOD)
     build({ contentDir, outDir, siteUrl: SITE, siteName: 'T' })
     const html = readFileSync(join(outDir, 'good/index.html'), 'utf8')
-    expect(html).toContain('href="/x"')
+    expect(html).toContain('href="/x/"')
     expect(html).not.toContain('/repo/')
   })
 })
@@ -202,6 +202,38 @@ describe('域名无关性', () => {
     write('c.md', NO_CANON.replace('  image: https://example.com/og.png\n', ''))
     build({ contentDir, outDir, siteUrl: SITE, siteName: 'T', defaultOgImage: `${SITE}/og.png` })
     expect(readFileSync(join(outDir, 'c/index.html'), 'utf8')).toContain('og:image')
+  })
+})
+
+describe('URL 规范化', () => {
+  const PORTABLE2 = GOOD.replace('canonical: https://example.com/good\n', '')
+
+  it('canonical 使用目录索引形式（带尾斜杠），与服务器实际地址一致', () => {
+    write('a.md', PORTABLE2)
+    const r = build({ contentDir, outDir, siteUrl: SITE, siteName: 'T' })
+    expect(r.pages[0].url).toBe('https://example.com/a/')
+  })
+
+  it('首页 canonical 只有一个斜杠', () => {
+    write('index.md', PORTABLE2)
+    const r = build({ contentDir, outDir, siteUrl: SITE, siteName: 'T' })
+    expect(r.pages[0].url).toBe('https://example.com/')
+  })
+
+  it('正文站内链接补尾斜杠，避免 301 跳转', () => {
+    write('b.md', PORTABLE2)
+    build({ contentDir, outDir, siteUrl: SITE, siteName: 'T' })
+    const html = readFileSync(join(outDir, 'b/index.html'), 'utf8')
+    expect(html).toContain('href="/x/"')
+    expect(html).not.toContain('href="/x"')
+  })
+
+  it('图片等带扩展名的地址不加尾斜杠', () => {
+    write('c.md', PORTABLE2)
+    build({ contentDir, outDir, siteUrl: SITE, siteName: 'T' })
+    const html = readFileSync(join(outDir, 'c/index.html'), 'utf8')
+    expect(html).toContain('src="/i.png"')
+    expect(html).not.toContain('/i.png/')
   })
 })
 
