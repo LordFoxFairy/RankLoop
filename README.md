@@ -17,7 +17,39 @@ SEO 全生命周期管理平台。平台托管内容并执行 SEO 规则检测�
   → sitemap 自动包含 + IndexNow 提交
 ```
 
-## 一键启动
+## 两种部署方式
+
+| 方式 | 成本 | 适用 | 内容存储 |
+| --- | --- | --- | --- |
+| **A. GitHub Pages（推荐先用）** | **完全免费** | 内容站、博客、文档 | Git 仓库 `content/` |
+| B. Docker 自托管 | 需服务器 | 多租户、需 API 动态提交 | PostgreSQL |
+
+方式 A 无需服务器与数据库，全部跑在 GitHub 免费额度内。
+
+---
+
+## 方式 A：GitHub Pages（免费）
+
+```bash
+# 1. 在 content/ 下新增 Markdown
+# 2. 提交 PR → 自动跑 24 条 SEO 检测，不合格无法合并
+# 3. 合并 → 自动构建、部署 Pages、提交搜索引擎
+```
+
+本地预览：
+
+```bash
+npm ci
+SITE_URL=https://<用户名>.github.io/<仓库名> npm run site
+```
+
+首次使用需在仓库 **Settings → Pages → Source** 选择 **GitHub Actions**。
+
+自动化能力见 [docs/Google-SEO-自动化说明.md](docs/Google-SEO-自动化说明.md)。
+
+---
+
+## 方式 B：Docker 自托管
 
 ```bash
 cp .env.example .env
