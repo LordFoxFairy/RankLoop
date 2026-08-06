@@ -3,6 +3,9 @@
 
 generator client {
   provider = "prisma-client-js"
+  // 容器运行时需要对应平台的查询引擎；缺少 linux 目标会导致镜像内启动失败。
+  // 同时覆盖 arm64 与 amd64，以支持多架构镜像（规格 §10.2）。
+  binaryTargets = ["native", "linux-arm64-openssl-3.0.x", "linux-musl-openssl-3.0.x", "debian-openssl-3.0.x"]
 }
 
 datasource db {
