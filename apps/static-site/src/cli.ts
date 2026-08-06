@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { type BuildResult, build } from './build'
+import { loadConfig } from './config'
 
 /**
  * 构建 CLI，供 GitHub Actions 调用。
@@ -77,16 +78,24 @@ function writeReport(outDir: string, result: BuildResult, siteUrl: string): void
 }
 
 function main(): void {
-  const siteUrl = (process.env.SITE_URL ?? 'http://localhost:4173').replace(/\/$/, '')
-  const siteName = process.env.SITE_NAME ?? 'RankLoop Site'
+  const config = loadConfig()
+  const siteUrl = config.siteUrl
+  const siteName = config.siteName
   const contentDir = process.env.CONTENT_DIR ?? 'content'
   const outDir = process.env.OUT_DIR ?? 'dist-site'
   const ignoreGate = process.env.IGNORE_GATE === 'true'
 
   mkdirSync(outDir, { recursive: true })
 
-  const defaultOgImage = process.env.OG_IMAGE ?? `${siteUrl}/og.png`
-  const result = build({ contentDir, outDir, siteUrl, siteName, ignoreGate, defaultOgImage })
+  const result = build({
+    contentDir,
+    outDir,
+    siteUrl,
+    siteName,
+    ignoreGate,
+    defaultOgImage: config.defaultOgImage,
+    config,
+  })
   const sitemapCount = writeSitemap(outDir, result)
   writeRobots(outDir, siteUrl)
   writeReport(outDir, result, siteUrl)

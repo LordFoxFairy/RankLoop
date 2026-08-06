@@ -1,6 +1,8 @@
 import { mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { basename, extname, join, relative } from 'node:path'
 import { parseContent, runRules } from '@rankloop/seo-rules'
+import type { SiteConfig } from './config'
+import { renderPage } from './theme'
 
 /**
  * 静态站生成器。
@@ -15,6 +17,8 @@ import { parseContent, runRules } from '@rankloop/seo-rules'
 export interface BuildOptions {
   contentDir: string
   outDir: string
+  /** 站点配置，驱动模板外观与导航 */
+  config?: SiteConfig
   /** 站点根地址，用于 canonical、sitemap 与内链判定 */
   siteUrl: string
   siteName: string
@@ -42,14 +46,6 @@ export interface BuildResult {
   averageScore: number | null
 }
 
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-}
 
 /**
  * 把根相对链接改写成带 base path 的形式。
@@ -123,63 +119,6 @@ function toUrlPath(file: string, contentDir: string): string {
   return `/${cleaned}`.replace(/\/+$/, '') || '/'
 }
 
-const LAYOUT = (params: {
-  siteName: string
-  siteUrl: string
-  url: string
-  title: string
-  description: string
-  canonical: string
-  lang: string
-  og: Record<string, string>
-  jsonLd: string
-  body: string
-  basePath: string
-}) => `<!doctype html>
-<html lang="${escapeHtml(params.lang)}">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${escapeHtml(params.title)}</title>
-<meta name="description" content="${escapeHtml(params.description)}">
-<link rel="canonical" href="${escapeHtml(params.canonical)}">
-<meta property="og:type" content="article">
-<meta property="og:title" content="${escapeHtml(params.og.title ?? params.title)}">
-<meta property="og:description" content="${escapeHtml(params.og.description ?? params.description)}">
-<meta property="og:url" content="${escapeHtml(params.canonical)}">
-${params.og.image ? `<meta property="og:image" content="${escapeHtml(params.og.image)}">` : ''}
-<meta name="twitter:card" content="summary_large_image">
-${params.jsonLd ? `<script type="application/ld+json">${params.jsonLd}</script>` : ''}
-<style>
-:root{color-scheme:light dark;--fg:#1a1d23;--bg:#fff;--muted:#5b6472;--line:#e4e7ec;--accent:#0b62d0}
-@media(prefers-color-scheme:dark){:root{--fg:#e6e9ef;--bg:#12151a;--muted:#98a2b3;--line:#272c37;--accent:#6aa9f5}}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);
- font:16px/1.75 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
-header,footer{border-color:var(--line)}
-header{border-bottom:1px solid var(--line);padding:16px 24px}
-header a{color:var(--fg);text-decoration:none;font-weight:650}
-main{max-width:760px;margin:0 auto;padding:36px 24px 60px}
-h1{font-size:2em;line-height:1.25;margin:0 0 .6em}
-h2{margin-top:1.8em;border-bottom:1px solid var(--line);padding-bottom:.3em}
-a{color:var(--accent)}
-img{max-width:100%;height:auto;border-radius:8px}
-pre{background:rgba(127,127,127,.12);padding:14px;border-radius:8px;overflow-x:auto}
-code{background:rgba(127,127,127,.12);padding:2px 6px;border-radius:4px;font-size:.9em}
-pre code{background:none;padding:0}
-blockquote{border-left:3px solid var(--accent);margin-left:0;padding-left:16px;color:var(--muted)}
-table{border-collapse:collapse;width:100%}th,td{border:1px solid var(--line);padding:8px 10px;text-align:left}
-footer{border-top:1px solid var(--line);padding:20px 24px;color:var(--muted);font-size:14px;text-align:center}
-</style>
-</head>
-<body>
-<header><a href="${escapeHtml(params.basePath || '/')}">${escapeHtml(params.siteName)}</a></header>
-<main>${params.body}</main>
-<footer>由 <a href="https://github.com/LordFoxFairy/RankLoop">RankLoop</a> 生成 · SEO 检测通过</footer>
-</body>
-</html>
-`
-
 export function build(options: BuildOptions): BuildResult {
   const files = walk(options.contentDir)
   const pages: PageResult[] = []
@@ -226,13 +165,22 @@ export function build(options: BuildOptions): BuildResult {
     const rendered =
       format === 'html'
         ? raw
-        : LAYOUT({
-            siteName: options.siteName,
-            siteUrl: options.siteUrl,
-            url: urlPath,
+        : renderPage({
+            config: options.config ?? {
+              siteName: options.siteName,
+              siteUrl: options.siteUrl,
+              lang: 'zh-CN',
+              nav: [],
+              theme: {
+                accent: '#0b62d0',
+                fontFamily: 'system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif',
+                contentWidth: '760px',
+                colorScheme: 'auto',
+              },
+            },
+            basePath,
             title: result.title,
             description: result.description,
-            // canonical 缺失时用页面自身地址兜底，避免重复内容问题
             canonical: parsed.doc.head.canonical ?? canonical,
             lang: parsed.doc.head.lang ?? 'zh-CN',
             og: parsed.doc.head.openGraph ?? {},
@@ -247,8 +195,8 @@ export function build(options: BuildOptions): BuildResult {
                 lastmod: result.lastmod,
                 image: parsed.doc.head.openGraph?.image,
               }),
-            basePath,
             body: rewriteLinks(parsed.renderedHtml ?? '', basePath),
+            isHome: urlPath === '/',
           })
 
     const html = format === 'html' ? rewriteLinks(rendered, basePath) : rendered

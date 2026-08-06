@@ -9,6 +9,12 @@
     "test": "vitest run",
     "site": "node dist/cli.js"
   },
-  "dependencies": { "@rankloop/seo-rules": "*" },
-  "devDependencies": { "typescript": "^5.5.3", "vitest": "^3.2.7" }
+  "dependencies": {
+    "@rankloop/seo-rules": "*",
+    "google-auth-library": "^9.15.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.3",
+    "vitest": "^3.2.7"
+  }
 }
