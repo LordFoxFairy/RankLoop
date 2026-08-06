@@ -67,6 +67,44 @@ function rewriteLinks(html: string, basePath: string): string {
     .replace(/(<img\b[^>]*\bsrc=")\/(?!\/)/g, `$1${basePath}/`)
 }
 
+/**
+ * 生成 Article 结构化数据。
+ *
+ * Google 用 JSON-LD 判断页面类型与主题，是获得富媒体搜索结果的前提。
+ * 内容自带 JSON-LD 时以其为准，否则按 Article 类型自动生成。
+ */
+function buildJsonLd(params: {
+  title: string
+  description: string
+  canonical: string
+  siteName: string
+  siteUrl: string
+  lastmod: Date
+  image?: string
+}): string {
+  const json = JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: params.title,
+    description: params.description,
+    mainEntityOfPage: { '@type': 'WebPage', '@id': params.canonical },
+    url: params.canonical,
+    dateModified: params.lastmod.toISOString(),
+    ...(params.image ? { image: params.image } : {}),
+    publisher: {
+      '@type': 'Organization',
+      name: params.siteName,
+      url: params.siteUrl,
+    },
+    inLanguage: 'zh-CN',
+  })
+
+  // 标题里的 </script> 会提前闭合 JSON-LD 标签，后续内容被当成可执行 JS。
+  // 把所有 < 转成 \u003c：JSON.parse 后仍还原为 <，但在 HTML 解析阶段
+  // 不再构成标签边界，因此无法逃逸出 script 块。
+  return json.replace(/</g, '\\u003c')
+}
+
 function walk(dir: string): string[] {
   const out: string[] = []
   for (const entry of readdirSync(dir)) {
@@ -198,7 +236,17 @@ export function build(options: BuildOptions): BuildResult {
             canonical: parsed.doc.head.canonical ?? canonical,
             lang: parsed.doc.head.lang ?? 'zh-CN',
             og: parsed.doc.head.openGraph ?? {},
-            jsonLd: (parsed.doc.jsonLd ?? [])[0] ?? '',
+            jsonLd:
+              (parsed.doc.jsonLd ?? [])[0] ??
+              buildJsonLd({
+                title: result.title,
+                description: result.description,
+                canonical: parsed.doc.head.canonical ?? canonical,
+                siteName: options.siteName,
+                siteUrl: options.siteUrl,
+                lastmod: result.lastmod,
+                image: parsed.doc.head.openGraph?.image,
+              }),
             basePath,
             body: rewriteLinks(parsed.renderedHtml ?? '', basePath),
           })

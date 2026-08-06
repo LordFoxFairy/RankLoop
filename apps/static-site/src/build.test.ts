@@ -205,6 +205,30 @@ describe('域名无关性', () => {
   })
 })
 
+describe('结构化数据', () => {
+  // Google 用 JSON-LD 判断页面类型与主题，是获得富媒体搜索结果的前提
+  it('自动生成合法的 Article JSON-LD', () => {
+    write('good.md', GOOD)
+    run()
+    const html = readFileSync(join(outDir, 'good/index.html'), 'utf8')
+    const m = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)
+    expect(m).not.toBeNull()
+    const data = JSON.parse(m![1])
+    expect(data['@type']).toBe('Article')
+    expect(data.headline).toContain('如何优化网站')
+    expect(data.url).toBe('https://example.com/good')
+  })
+
+  it('JSON-LD 必须是可解析的合法 JSON', () => {
+    // 解析失败的 JSON-LD 会被 Google 直接忽略，等于没写
+    write('good.md', GOOD)
+    run()
+    const html = readFileSync(join(outDir, 'good/index.html'), 'utf8')
+    const m = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)
+    expect(() => JSON.parse(m![1])).not.toThrow()
+  })
+})
+
 describe('构建统计', () => {
   it('计算平均健康分', () => {
     write('good.md', GOOD)
