@@ -17,18 +17,36 @@ SEO 全生命周期管理平台。平台托管内容并执行 SEO 规则检测�
   → sitemap 自动包含 + IndexNow 提交
 ```
 
-## 两种部署方式
+## 三种部署方式
 
-| 方式 | 成本 | 适用 | 内容存储 |
+| 方式 | 成本 | 域名 | 适用 |
 | --- | --- | --- | --- |
-| **A. GitHub Pages（推荐先用）** | **完全免费** | 内容站、博客、文档 | Git 仓库 `content/` |
-| B. Docker 自托管 | 需服务器 | 多租户、需 API 动态提交 | PostgreSQL |
+| **A. Cloudflare Pages（推荐）** | **免费**（500 构建/月） | 可绑根域名 | 内容站、博客、文档 |
+| B. GitHub Pages | **免费** | 子路径 `/仓库名/` | 同上，无自有域名时 |
+| C. Docker 自托管 | 需服务器 | 自定义 | 多租户、API 动态提交 |
 
-方式 A 无需服务器与数据库，全部跑在 GitHub 免费额度内。
+A 和 B 都不需要 Docker 与数据库。**A 更推荐**：可绑根域名，
+避免子路径带来的相对链接问题，且 Cloudflare CDN 对 SEO 更友好。
 
 ---
 
-## 方式 A：GitHub Pages（免费）
+## 方式 A：Cloudflare Pages（免费，推荐）
+
+```bash
+CLOUDFLARE_API_TOKEN=xxx CLOUDFLARE_ACCOUNT_ID=yyy \
+  ./infra/scripts/cloudflare-pages-setup.sh rankloop https://你的域名
+```
+
+API Token 在 [Cloudflare 控制台](https://dash.cloudflare.com/profile/api-tokens)
+创建，权限选 **Cloudflare Pages:Edit**。
+
+配置自动部署：仓库 Settings → Secrets 添加 `CLOUDFLARE_API_TOKEN`、
+`CLOUDFLARE_ACCOUNT_ID`；Variables 添加 `SITE_URL`。
+之后修改 `content/` 推送到 main 即自动构建部署。
+
+---
+
+## 方式 B：GitHub Pages（免费）
 
 ```bash
 # 1. 在 content/ 下新增 Markdown
