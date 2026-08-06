@@ -11,8 +11,9 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "npm run build --workspaces --if-present",
-    "typecheck": "npm run typecheck --workspaces --if-present",
+    "generate": "prisma generate --schema packages/db/prisma/schema.prisma",
+    "build": "npm run generate && npm run build --workspaces --if-present",
+    "typecheck": "npm run generate && npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "clean": "rm -rf dist apps/*/dist packages/*/dist"
   },

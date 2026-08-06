@@ -10,7 +10,10 @@
     "start": "node dist/server.js"
   },
   "dependencies": {
-    "@rankloop/seo-rules": "*"
+    "@prisma/client": "^6.19.3",
+    "@rankloop/seo-rules": "*",
+    "fastify": "^5.11.2",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "typescript": "^5.5.3",
