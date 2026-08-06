@@ -1,0 +1,132 @@
+name: 发布站点
+
+# 合并到 main 后：构建 → 部署 GitHub Pages → 提交搜索引擎。
+# 全程使用 GitHub 免费额度，不需要服务器。
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'content/**'
+      - 'packages/seo-rules/**'
+      - 'apps/static-site/**'
+      - '.github/workflows/deploy-site.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      site_url: ${{ steps.vars.outputs.site_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - id: vars
+        run: |
+          URL="${{ vars.SITE_URL }}"
+          if [ -z "$URL" ]; then
+            URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
+          fi
+          echo "site_url=${URL%/}" >> "$GITHUB_OUTPUT"
+
+      - run: npm ci
+
+      - run: npm run build --workspace @rankloop/seo-rules
+
+      - run: npm run build --workspace @rankloop/static-site
+
+      # 门槛在此强制：存在 critical 问题则构建失败，不会部署
+      - name: 构建站点（含 SEO 门槛）
+        env:
+          SITE_URL: ${{ steps.vars.outputs.site_url }}
+          SITE_NAME: ${{ vars.SITE_NAME || github.event.repository.name }}
+        run: node apps/static-site/dist/cli.js
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist-site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+  notify-search-engines:
+    needs: [build, deploy]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # IndexNow：Bing / Yandex / Seznam / Naver 支持，Google 不参与该协议。
+      # 需要在仓库配置 INDEXNOW_KEY，并把 <key>.txt 放到站点根目录。
+      - name: IndexNow 通知
+        if: ${{ vars.INDEXNOW_KEY != '' }}
+        env:
+          SITE_URL: ${{ needs.build.outputs.site_url }}
+          KEY: ${{ vars.INDEXNOW_KEY }}
+        run: |
+          HOST="$(echo "$SITE_URL" | sed -E 's#https?://([^/]+).*#\1#')"
+          curl -sS -X POST https://api.indexnow.org/indexnow \
+            -H 'Content-Type: application/json' \
+            -d "{\"host\":\"$HOST\",\"key\":\"$KEY\",\"keyLocation\":\"$SITE_URL/$KEY.txt\",\"urlList\":[\"$SITE_URL/sitemap.xml\"]}" \
+            -w '\nIndexNow HTTP %{http_code}\n' || true
+
+      # Google 不支持 IndexNow，只能通过 Search Console API 提交 sitemap。
+      # 需要 GCP 服务账号并在 Search Console 中授权该账号为站点用户。
+      - name: 提交 sitemap 到 Google Search Console
+        if: ${{ secrets.GSC_SERVICE_ACCOUNT != '' }}
+        env:
+          SITE_URL: ${{ needs.build.outputs.site_url }}
+          GSC_SERVICE_ACCOUNT: ${{ secrets.GSC_SERVICE_ACCOUNT }}
+        run: |
+          npm i -g google-auth-library@9 >/dev/null 2>&1
+          node -e '
+            const { JWT } = require("google-auth-library")
+            const creds = JSON.parse(process.env.GSC_SERVICE_ACCOUNT)
+            const siteUrl = process.env.SITE_URL
+            const sitemap = `${siteUrl}/sitemap.xml`
+            const client = new JWT({
+              email: creds.client_email,
+              key: creds.private_key,
+              scopes: ["https://www.googleapis.com/auth/webmasters"],
+            })
+            const target = encodeURIComponent(siteUrl + "/")
+            const feed = encodeURIComponent(sitemap)
+            client.request({
+              url: `https://www.googleapis.com/webmasters/v3/sites/${target}/sitemaps/${feed}`,
+              method: "PUT",
+            }).then(() => console.log("✓ sitemap 已提交 Google Search Console"))
+              .catch(e => {
+                // 未授权或站点未验证时不应让整个发布失败
+                console.error("✗ 提交失败：", e.message)
+                process.exitCode = 0
+              })
+          '
+
+      - name: 说明
+        run: |
+          echo "### 搜索引擎提交" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- sitemap: ${{ needs.build.outputs.site_url }}/sitemap.xml" >> "$GITHUB_STEP_SUMMARY"
+          echo "- IndexNow 通知 Bing/Yandex/Seznam/Naver（Google 不支持该协议）" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Google 侧通过 Search Console 提交 sitemap，收录时间由 Google 决定，无法强制" >> "$GITHUB_STEP_SUMMARY"

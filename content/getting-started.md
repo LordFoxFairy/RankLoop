@@ -1,0 +1,37 @@
+---
+title: 快速开始 — 三步接入 RankLoop SEO 检测流程
+description: 本指南介绍如何在三个步骤内接入 RankLoop：新增内容文件、提交合并请求触发自动检测、通过后自动构建并提交搜索引擎。
+canonical: https://lordfoxfairy.github.io/RankLoop/getting-started
+lang: zh-CN
+og:
+  title: 快速开始
+  description: 三步接入 RankLoop
+  image: https://lordfoxfairy.github.io/RankLoop/og.png
+---
+
+# 快速开始
+
+只需要三步就能让内容进入自动 SEO 检测流程。
+
+## 第一步：新增内容文件
+
+在仓库的 `content/` 目录下新建一个 Markdown 文件。文件顶部的 frontmatter 用于提供
+页面元数据，这些字段会被编译进最终 HTML 的 head 部分。
+
+必填字段是 `title` 与 `description`，两者直接决定搜索结果中的展示效果。
+
+## 第二步：提交合并请求
+
+推送分支并创建合并请求后，自动化流程会立即对新增内容执行全部检测规则。
+如果存在严重问题，检查会失败并在合并请求下留下评论，逐条说明问题与修复方式。
+
+修复之后重新推送即可，检测会自动重跑。
+
+## 第三步：合并并自动发布
+
+检查通过并合并到主分支后，站点会被重新构建并部署，sitemap 同时更新，
+随后自动提交给搜索引擎。整个过程无需任何人工操作。
+
+## 相关阅读
+
+返回[首页](/)查看项目介绍，或阅读[规则清单](/rules)了解每一条检测规则的含义。

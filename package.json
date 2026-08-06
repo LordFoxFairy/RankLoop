@@ -12,10 +12,11 @@
   },
   "scripts": {
     "generate": "prisma generate --schema packages/db/prisma/schema.prisma",
-    "build": "npm run generate && npm run build --workspace @rankloop/seo-rules && npm run build --workspace @rankloop/api",
+    "build": "npm run generate && npm run build --workspace @rankloop/seo-rules && npm run build --workspace @rankloop/api && npm run build --workspace @rankloop/static-site",
     "typecheck": "npm run generate && npm run build --workspace @rankloop/seo-rules && npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
-    "clean": "rm -rf dist apps/*/dist packages/*/dist"
+    "clean": "rm -rf dist apps/*/dist packages/*/dist",
+    "site": "npm run build --workspace @rankloop/seo-rules && npm run build --workspace @rankloop/static-site && node apps/static-site/dist/cli.js"
   },
   "devDependencies": {
     "@types/node": "^22.20.1",

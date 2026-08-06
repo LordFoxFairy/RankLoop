@@ -37,3 +37,6 @@ Thumbs.db
 
 # Playwright MCP 运行产物
 .playwright-mcp/
+
+# 静态站构建产物
+/dist-site

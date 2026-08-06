@@ -1,0 +1,104 @@
+name: SEO 检测
+
+# 内容变更时自动检测。存在 critical 问题的内容无法合并。
+on:
+  pull_request:
+    paths:
+      - 'content/**'
+      - 'packages/seo-rules/**'
+      - 'apps/static-site/**'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build --workspace @rankloop/seo-rules
+
+      - run: npm run build --workspace @rankloop/static-site
+
+      - name: 执行 SEO 检测
+        id: seo
+        env:
+          SITE_URL: ${{ vars.SITE_URL || format('https://{0}.github.io/{1}', github.repository_owner, github.event.repository.name) }}
+          SITE_NAME: ${{ vars.SITE_NAME || github.event.repository.name }}
+          # 检测阶段不因失败中断，先产出报告再决定是否失败
+          IGNORE_GATE: 'true'
+        run: node apps/static-site/dist/cli.js | tee seo-output.txt
+
+      - name: 生成检测报告
+        id: report
+        run: |
+          node -e '
+            const r = require("./dist-site/seo-report.json");
+            const bad = r.pages.filter(p => !p.published);
+            const lines = [];
+            lines.push("## SEO 检测结果");
+            lines.push("");
+            lines.push(`共 ${r.summary.total} 篇 · 平均健康分 **${r.summary.average_score ?? "—"}**`);
+            lines.push("");
+            lines.push("| 页面 | 健康分 | 状态 |");
+            lines.push("| --- | ---: | --- |");
+            for (const p of r.pages) {
+              const status = p.published ? "✅ 通过" : `❌ ${p.blocking.join(", ")}`;
+              lines.push(`| \`${p.path}\` | ${p.score} | ${status} |`);
+            }
+            if (bad.length) {
+              lines.push("");
+              lines.push(`> ❌ ${bad.length} 篇存在严重问题，修复后方可合并。`);
+            } else {
+              lines.push("");
+              lines.push("> ✅ 全部通过，合并后将自动发布并提交搜索引擎。");
+            }
+            const body = lines.join("\n");
+            require("fs").writeFileSync("report.md", body);
+            require("fs").appendFileSync(process.env.GITHUB_STEP_SUMMARY, body);
+            if (bad.length) process.exitCode = 1;
+          '
+
+      - name: 在 PR 中评论
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs')
+            if (!fs.existsSync('report.md')) return
+            const body = fs.readFileSync('report.md', 'utf8')
+            const marker = '## SEO 检测结果'
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner, repo: context.repo.repo,
+              issue_number: context.issue.number,
+            })
+            const existing = comments.find(c =>
+              c.user.type === 'Bot' && c.body.startsWith(marker))
+
+            // 更新已有评论而非重复追加，避免刷屏
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                comment_id: existing.id, body,
+              })
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: context.issue.number, body,
+              })
+            }
+
+      - name: 门槛判定
+        env:
+          SITE_URL: ${{ vars.SITE_URL || format('https://{0}.github.io/{1}', github.repository_owner, github.event.repository.name) }}
+        run: node apps/static-site/dist/cli.js

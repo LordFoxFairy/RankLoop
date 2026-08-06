@@ -1,0 +1,14 @@
+{
+  "name": "@rankloop/static-site",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/cli.js",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "site": "node dist/cli.js"
+  },
+  "dependencies": { "@rankloop/seo-rules": "*" },
+  "devDependencies": { "typescript": "^5.5.3", "vitest": "^3.2.7" }
+}
