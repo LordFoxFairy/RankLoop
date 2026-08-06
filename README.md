@@ -9,25 +9,56 @@ SEO 全生命周期管理平台。平台托管内容并执行 SEO 规则检测�
 
 ```text
 第三方 POST 内容
-  → 平台跑 SEO 规则
+  → 平台跑 24 条 SEO 规则
   → 返回不合格项（规则编码 + 证据 + 修复建议）
   → 第三方自行优化后 PUT 更新
   → 重新检测（可多轮迭代）
-  → 达标 → publish（存在 critical 问题时拒绝）
+  → 达标 → publish（存在 critical 问题时返回 422 拒绝）
+  → sitemap 自动包含 + IndexNow 提交
 ```
+
+## 一键启动
+
+```bash
+cp .env.example .env
+
+# 必须替换为随机值，否则生产模式启动会直接失败
+openssl rand -base64 32   # 填入 SESSION_SECRET
+openssl rand -base64 32   # 填入 ENCRYPTION_KEY
+openssl rand -hex 16      # 填入 POSTGRES_PASSWORD
+
+docker compose up -d --build
+docker compose exec api node /app/seed.mjs   # 输出 API Key，只显示一次
+```
+
+打开 <http://127.0.0.1:8080/>，粘贴 API Key 即可看到可视化面板。
+
+## 可视化面板
+
+由 API 进程直接提供（单容器、单域名，无需额外构建）：
+
+- 平均健康分、内容总数、可发布数、被门槛拦截数
+- 30 天健康分趋势折线
+- 问题级别分布（严重 / 警告 / 建议）
+- 最常见问题排行
+
+数据全部来自 `/api/v1/stats/*` 真实接口，无任何演示数据。
 
 ## 功能范围
 
 已实现：
 
 - 内容托管 CRUD，支持 HTML 与 Markdown 两种格式
-- 16 条 SEO 规则，分 critical / warning / notice 三级
+- **24 条 SEO 规则**，分 critical / warning / notice 三级
 - 可解释健康分（按规则权重扣分，可追溯每一分的来源）
 - 发布门槛：critical 问题阻断发布
 - 无状态预检接口（不落库，供发布前反复试算）
-- API Key 认证与 scope 授权
-- 多租户隔离
-- Docker 一键部署
+- Sitemap 与 robots.txt 自动生成
+- IndexNow 提交（含幂等与跨站 URL 拦截）
+- API Key 认证与 scope 授权、多租户隔离
+- 可视化面板
+- OpenAPI 3.1 文档
+- Docker 一键部署 + GitHub Actions 自动构建镜像
 
 明确不做（第一版）：
 
@@ -39,64 +70,43 @@ SEO 全生命周期管理平台。平台托管内容并执行 SEO 规则检测�
 
 - 外部站点抓取与 SSRF 防护
 - 网站所有权验证
-- IndexNow 实际提交
-- Google Search Console 集成
-- Web 管理面板
+- IndexNow 队列实际投递（当前入库为 `queued`，如实返回，不伪造成功）
+- Google Search Console OAuth 与数据同步
+- Webhook 实际投递（签名与重试逻辑已实现并有测试）
 
 详见 [docs/ADR-001-内容托管闭环.md](docs/ADR-001-内容托管闭环.md)。
 
-## 快速开始
+## 关于 Google 收录
 
-```bash
-cp .env.example .env
+必须如实说明：**没有任何工具可以强制 Google 收录**。本平台的作用是
 
-# 必须替换为随机值，否则生产模式启动会直接失败
-openssl rand -base64 32   # 填入 SESSION_SECRET
-openssl rand -base64 32   # 填入 ENCRYPTION_KEY
+1. 检测并阻止会导致不被收录的问题（noindex、缺 title、canonical 跨域、空内容等）；
+2. 自动生成 sitemap 并在 robots.txt 中声明，让 Google 更快发现；
+3. 通过 IndexNow 通知 Bing / Yandex / Seznam / Naver —— **Google 不支持该协议**。
 
-docker compose up -d --build
-```
-
-启动后：
-
-```bash
-curl http://127.0.0.1:8080/health/ready
-```
-
-创建工作区、站点与 API Key（明文 Key 只显示一次）：
-
-```bash
-docker compose exec api node /app/seed.mjs
-```
-
-## 本地开发
-
-```bash
-npm ci
-npm run generate     # 生成 Prisma Client，typecheck 依赖它
-npm test
-npm run build
-```
+Google 侧的收录仍取决于其自身抓取策略与内容质量。
 
 ## API
 
-统一前缀 `/api/v1`，认证方式：
-
-```http
-Authorization: Bearer rkl_live_xxxxxxxx
-```
+统一前缀 `/api/v1`，认证：`Authorization: Bearer rkl_live_xxx`
 
 | 方法 | 路径 | scope | 说明 |
 | --- | --- | --- | --- |
-| GET | `/rules` | 公开 | 规则清单与权重 |
+| GET | `/rules` | 公开 | 24 条规则清单与权重 |
+| GET | `/openapi.json` | 公开 | OpenAPI 3.1 文档 |
 | POST | `/sites/:siteId/contents` | `contents:write` | 提交内容并检测 |
 | GET | `/sites/:siteId/contents` | `contents:read` | 列出站点内容 |
-| GET | `/contents/:contentId` | `contents:read` | 查看内容与最新检测 |
+| GET | `/contents/:contentId` | `contents:read` | 查看内容与检测结果 |
 | PUT | `/contents/:contentId` | `contents:write` | 更新内容，产生新版本 |
 | POST | `/contents/check` | `contents:write` | 无状态预检，不落库 |
-| POST | `/contents/:contentId/publish` | `contents:publish` | 发布，critical 时返回 422 |
-
-响应格式见 `docs/RankLoop-SEO-项目完整.md` §7.3。
+| POST | `/contents/:contentId/publish` | `contents:publish` | 发布，critical 时 422 |
+| GET | `/stats/overview` | `contents:read` | 面板总览统计 |
+| GET | `/stats/trend` | `contents:read` | 30 天健康分趋势 |
+| GET | `/sites/:siteId/sitemap.xml` | `indexing:read` | 已发布内容的 sitemap |
+| GET | `/sites/:siteId/robots.txt` | `indexing:read` | robots.txt |
+| POST | `/sites/:siteId/indexnow/key` | `indexing:write` | 配置 IndexNow Key |
+| POST | `/sites/:siteId/indexnow/submit` | `indexing:write` | 提交 URL（幂等） |
+| GET | `/sites/:siteId/indexnow/submissions` | `indexing:read` | 提交记录 |
 
 ### 示例：提交 → 修复 → 发布
 
@@ -110,9 +120,8 @@ curl -X POST "http://127.0.0.1:8080/api/v1/sites/$SITE/contents" \
   -d '{"path":"/article","format":"markdown","body":"# 标题\n\n短"}'
 # → score 13，critical: MISSING_TITLE / EMPTY_CONTENT
 
-# 发布会被拦截
-curl -X POST "http://127.0.0.1:8080/api/v1/contents/<id>/publish" \
-  -H "Authorization: Bearer $KEY"
+# 发布被拦截
+curl -X POST "http://127.0.0.1:8080/api/v1/contents/<id>/publish" -H "Authorization: Bearer $KEY"
 # → 422 SEO_GATE_FAILED，details.blocking 列出阻塞规则
 
 # 修复后更新 → score 90，publishable: true → 再次发布返回 200
@@ -120,7 +129,7 @@ curl -X POST "http://127.0.0.1:8080/api/v1/contents/<id>/publish" \
 
 ### Markdown 元数据
 
-Markdown 内容的 title / description / canonical 等元数据通过 frontmatter 提供：
+Markdown 的 title / description / canonical 通过 frontmatter 提供：
 
 ```markdown
 ---
@@ -131,13 +140,43 @@ lang: zh-CN
 og:
   title: SEO 指南
   description: 完整指南
+  image: https://example.com/og.png
 ---
 
 # 正文标题
 ```
 
-平台负责渲染并生成 `<head>`，因此 HTML 与 Markdown 跑同一套规则、得到一致结论
-（有测试保证等价性，第三方无法通过切换格式绕过门槛）。
+平台负责渲染并生成 `<head>`，因此 HTML 与 Markdown 跑同一套规则、结论一致
+（有等价性测试保证，第三方无法通过切换格式绕过门槛）。
+
+## 架构
+
+按 DDD 分层，依赖方向由外向内：
+
+```text
+apps/api/src/
+  domain/          领域层：聚合根、值对象、领域异常、仓储接口（不依赖框架与数据库）
+  application/     应用层：用例编排、事务边界
+  infrastructure/  基础设施层：Prisma 仓储实现、规则引擎适配
+  interfaces/      接口层：HTTP 路由、错误映射、可视化面板
+  shared/          跨层工具：URL 规范化、API Key、Webhook 签名
+packages/
+  seo-rules/       规则引擎（输入无关，二期爬虫可直接复用）
+  db/              Prisma schema 与迁移
+```
+
+发布门槛等业务规则住在 `domain/content/content.ts` 聚合根中，
+任何调用方（HTTP、队列、脚本）都无法绕过。
+
+## 本地开发
+
+```bash
+npm ci
+npm run generate     # 生成 Prisma Client，typecheck 依赖它
+npm test             # 150 个测试
+npm run typecheck
+npm run build
+```
 
 ## 环境变量
 
@@ -155,19 +194,9 @@ og:
 | `DEFAULT_MAX_SITES` | `5` | 每工作区站点数配额 |
 | `DEFAULT_MAX_CONTENTS` | `1000` | 每工作区内容数配额 |
 
-## 数据库迁移
-
-```bash
-# 生产：compose 中由独立的 migrate 服务执行，避免多实例并发迁移
-docker compose run --rm migrate
-
-# 开发
-npx prisma migrate dev --schema packages/db/prisma/schema.prisma
-```
-
 ## 镜像
 
-GitHub Actions 自动构建并推送到 GHCR：
+GitHub Actions 自动构建并推送到 GHCR，支持 `linux/amd64` 与 `linux/arm64`：
 
 ```text
 ghcr.io/lordfoxfairy/rankloop:main          # main 分支
@@ -176,26 +205,19 @@ ghcr.io/lordfoxfairy/rankloop:latest        # 正式 tag
 ghcr.io/lordfoxfairy/rankloop:sha-abc1234   # 单次提交
 ```
 
-支持 `linux/amd64` 与 `linux/arm64`。
-
 部署与升级见 [DEPLOY.md](DEPLOY.md)。
 
 ## 安全
 
 - API Key 只存 SHA-256 哈希，明文仅创建时返回一次
 - 跨租户访问返回 404 而非 403，避免泄露资源是否存在
-- 内容路径阻断 `..` 与编码绕过
+- 内容路径阻断 `..` 与 `%2e%2e` 编码绕过
+- IndexNow 只接受属于本站点的 URL
 - Webhook 签名覆盖时间戳，防重放
 - 容器以非 root 用户运行，数据库与 Redis 不映射公网
 - 生产模式使用示例密钥直接拒绝启动
 
 发现安全问题请通过 GitHub Issue 私下联系维护者。
-
-## 已知限制
-
-- 二期功能（爬虫、IndexNow 提交、GSC 集成、Web 面板）尚未实现
-- 尚无 Web 界面，当前仅提供 API
-- 托管内容的最终投递目标尚未确定，已通过抽象隔离以避免返工
 
 ## License
 
