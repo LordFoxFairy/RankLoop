@@ -1,8 +1,9 @@
 name: Publish Docker image
 
+# 多架构镜像构建很慢，若每次 push 都跑会占满并发额度、
+# 把内容站点的部署堵在队列里。因此只在打版本标签或手动触发时构建。
 on:
   push:
-    branches: [main]
     tags: ['v*']
   workflow_dispatch:
 
