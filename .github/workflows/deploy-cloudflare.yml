@@ -1,0 +1,113 @@
+name: 部署到 Cloudflare Pages
+
+# Cloudflare Pages 免费版：每月 500 次构建、100 个自定义域名、20000 个文件。
+# 不需要 Docker、不需要服务器；可绑根域名，因此没有 GitHub Pages 的子路径死链问题。
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'content/**'
+      - 'packages/seo-rules/**'
+      - 'apps/static-site/**'
+      - '.github/workflows/deploy-cloudflare.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  deployments: write
+
+concurrency:
+  group: cloudflare-pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build --workspace @rankloop/seo-rules
+
+      - run: npm run build --workspace @rankloop/static-site
+
+      # SEO 门槛：存在 critical 问题则构建失败，不会部署
+      - name: 构建站点（含 SEO 门槛）
+        env:
+          SITE_URL: ${{ vars.SITE_URL || 'https://rankloop.pages.dev' }}
+          SITE_NAME: ${{ vars.SITE_NAME || 'RankLoop SEO' }}
+        run: node apps/static-site/dist/cli.js
+
+      - name: 部署到 Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PROJECT: ${{ vars.CF_PAGES_PROJECT || 'rankloop' }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::warning::未配置 CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID，跳过部署"
+            echo "配置方法见 DEPLOY.md" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          npx wrangler@4 pages deploy dist-site \
+            --project-name="$PROJECT" \
+            --branch=main \
+            --commit-dirty=true
+
+      - name: 提交搜索引擎
+        env:
+          SITE_URL: ${{ vars.SITE_URL || 'https://rankloop.pages.dev' }}
+          INDEXNOW_KEY: ${{ vars.INDEXNOW_KEY }}
+          GSC_SERVICE_ACCOUNT: ${{ secrets.GSC_SERVICE_ACCOUNT }}
+        run: |
+          # IndexNow：Bing / Yandex / Seznam / Naver。Google 不支持该协议。
+          if [ -n "$INDEXNOW_KEY" ]; then
+            HOST="$(echo "$SITE_URL" | sed -E 's#https?://([^/]+).*#\1#')"
+            curl -sS -X POST https://api.indexnow.org/indexnow \
+              -H 'Content-Type: application/json' \
+              -d "{\"host\":\"$HOST\",\"key\":\"$INDEXNOW_KEY\",\"keyLocation\":\"$SITE_URL/$INDEXNOW_KEY.txt\",\"urlList\":[\"$SITE_URL/sitemap.xml\"]}" \
+              -w '\nIndexNow HTTP %{http_code}\n' || true
+          else
+            echo "未配置 INDEXNOW_KEY，跳过 IndexNow"
+          fi
+
+          # Google 侧只能通过 Search Console API 提交 sitemap
+          if [ -n "$GSC_SERVICE_ACCOUNT" ]; then
+            npm i google-auth-library@9 >/dev/null 2>&1
+            node -e '
+              const { JWT } = require("google-auth-library")
+              const creds = JSON.parse(process.env.GSC_SERVICE_ACCOUNT)
+              const siteUrl = process.env.SITE_URL
+              const client = new JWT({
+                email: creds.client_email,
+                key: creds.private_key,
+                scopes: ["https://www.googleapis.com/auth/webmasters"],
+              })
+              const target = encodeURIComponent(siteUrl + "/")
+              const feed = encodeURIComponent(siteUrl + "/sitemap.xml")
+              client.request({
+                url: `https://www.googleapis.com/webmasters/v3/sites/${target}/sitemaps/${feed}`,
+                method: "PUT",
+              }).then(() => console.log("✓ sitemap 已提交 Google Search Console"))
+                .catch(e => { console.error("✗ 提交失败：", e.message); process.exitCode = 0 })
+            '
+          else
+            echo "未配置 GSC_SERVICE_ACCOUNT，跳过 Google Search Console 提交"
+          fi
+
+      - name: 摘要
+        run: |
+          {
+            echo "### 部署完成"
+            echo ""
+            echo "- 站点：${{ vars.SITE_URL || 'https://rankloop.pages.dev' }}"
+            echo "- sitemap：${{ vars.SITE_URL || 'https://rankloop.pages.dev' }}/sitemap.xml"
+            echo "- IndexNow 通知 Bing/Yandex/Seznam/Naver（Google 不支持该协议）"
+            echo "- Google 通过 Search Console 提交 sitemap，收录时间由 Google 决定"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,12 +1,10 @@
 ---
 title: RankLoop SEO — 内容发布前自动做 SEO 体检
 description: RankLoop 在内容发布前自动执行 24 条 SEO 规则检测，存在严重问题的内容无法发布，并自动生成 sitemap 提交给搜索引擎。
-canonical: https://lordfoxfairy.github.io/RankLoop/
 lang: zh-CN
 og:
   title: RankLoop SEO
   description: 发布前自动 SEO 体检
-  image: https://lordfoxfairy.github.io/RankLoop/og.png
 ---
 
 # RankLoop SEO

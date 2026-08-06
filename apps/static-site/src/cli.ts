@@ -85,7 +85,8 @@ function main(): void {
 
   mkdirSync(outDir, { recursive: true })
 
-  const result = build({ contentDir, outDir, siteUrl, siteName, ignoreGate })
+  const defaultOgImage = process.env.OG_IMAGE ?? `${siteUrl}/og.png`
+  const result = build({ contentDir, outDir, siteUrl, siteName, ignoreGate, defaultOgImage })
   const sitemapCount = writeSitemap(outDir, result)
   writeRobots(outDir, siteUrl)
   writeReport(outDir, result, siteUrl)

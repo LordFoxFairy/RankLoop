@@ -20,6 +20,8 @@ export interface BuildOptions {
   siteName: string
   /** true 时即使有 critical 问题也照常输出，用于本地预览 */
   ignoreGate?: boolean
+  /** 内容未指定 og:image 时使用的默认图 */
+  defaultOgImage?: string
 }
 
 export interface PageResult {
@@ -47,6 +49,22 @@ function escapeHtml(s: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;')
+}
+
+/**
+ * 把根相对链接改写成带 base path 的形式。
+ *
+ * 站点部署在子路径（如 GitHub Pages 的 /RankLoop/）时，正文里的 `/about`
+ * 会被浏览器和 Googlebot 解析成 `域名/about` —— 全是 404。
+ * 满页死链会被 Google 判定为低质量站点，严重影响收录与排名。
+ * 部署在根域名（如 Cloudflare Pages）时 basePath 为空，此函数不做改动。
+ */
+function rewriteLinks(html: string, basePath: string): string {
+  if (!basePath) return html
+  // 只改写以单个 / 开头的站内链接；// 开头是协议相对的外链，不能动
+  return html
+    .replace(/(<a\b[^>]*\bhref=")\/(?!\/)/g, `$1${basePath}/`)
+    .replace(/(<img\b[^>]*\bsrc=")\/(?!\/)/g, `$1${basePath}/`)
 }
 
 function walk(dir: string): string[] {
@@ -78,6 +96,7 @@ const LAYOUT = (params: {
   og: Record<string, string>
   jsonLd: string
   body: string
+  basePath: string
 }) => `<!doctype html>
 <html lang="${escapeHtml(params.lang)}">
 <head>
@@ -116,7 +135,7 @@ footer{border-top:1px solid var(--line);padding:20px 24px;color:var(--muted);fon
 </style>
 </head>
 <body>
-<header><a href="/">${escapeHtml(params.siteName)}</a></header>
+<header><a href="${escapeHtml(params.basePath || '/')}">${escapeHtml(params.siteName)}</a></header>
 <main>${params.body}</main>
 <footer>由 <a href="https://github.com/LordFoxFairy/RankLoop">RankLoop</a> 生成 · SEO 检测通过</footer>
 </body>
@@ -126,6 +145,8 @@ footer{border-top:1px solid var(--line);padding:20px 24px;color:var(--muted);fon
 export function build(options: BuildOptions): BuildResult {
   const files = walk(options.contentDir)
   const pages: PageResult[] = []
+  // 站点部署在子路径时（如 https://user.github.io/repo），需要改写站内链接
+  const basePath = new URL(options.siteUrl).pathname.replace(/\/$/, '')
 
   for (const file of files) {
     const raw = readFileSync(file, 'utf8')
@@ -134,6 +155,18 @@ export function build(options: BuildOptions): BuildResult {
     const canonical = `${options.siteUrl}${urlPath}`
 
     const parsed = parseContent({ format, body: raw, url: canonical })
+
+    // canonical 与 og:image 由构建时按 SITE_URL 注入，内容里不写死域名——
+    // 否则换域名要改每一个文件，且换错就会触发 CANONICAL_CROSS_DOMAIN。
+    // frontmatter 显式指定时以其为准（跨域归并等特殊场景）。
+    parsed.doc.head.canonical ??= canonical
+    if (options.defaultOgImage) {
+      parsed.doc.head.openGraph = {
+        ...(parsed.doc.head.openGraph ?? {}),
+        image: parsed.doc.head.openGraph?.image ?? options.defaultOgImage,
+      }
+    }
+
     const check = runRules(parsed.doc)
     const blocking = check.issues.filter((i) => i.severity === 'critical').map((i) => i.code)
     const allowed = blocking.length === 0 || options.ignoreGate === true
@@ -152,7 +185,7 @@ export function build(options: BuildOptions): BuildResult {
 
     if (!allowed) continue
 
-    const html =
+    const rendered =
       format === 'html'
         ? raw
         : LAYOUT({
@@ -166,8 +199,11 @@ export function build(options: BuildOptions): BuildResult {
             lang: parsed.doc.head.lang ?? 'zh-CN',
             og: parsed.doc.head.openGraph ?? {},
             jsonLd: (parsed.doc.jsonLd ?? [])[0] ?? '',
-            body: parsed.renderedHtml ?? '',
+            basePath,
+            body: rewriteLinks(parsed.renderedHtml ?? '', basePath),
           })
+
+    const html = format === 'html' ? rewriteLinks(rendered, basePath) : rendered
 
     const outFile = join(options.outDir, urlPath === '/' ? 'index.html' : `${urlPath}/index.html`)
     mkdirSync(join(outFile, '..'), { recursive: true })

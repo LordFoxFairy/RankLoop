@@ -1,12 +1,10 @@
 ---
 title: 快速开始 — 三步接入 RankLoop SEO 检测流程
 description: 本指南介绍如何在三个步骤内接入 RankLoop：新增内容文件、提交合并请求触发自动检测、通过后自动构建并提交搜索引擎。
-canonical: https://lordfoxfairy.github.io/RankLoop/getting-started
 lang: zh-CN
 og:
   title: 快速开始
   description: 三步接入 RankLoop
-  image: https://lordfoxfairy.github.io/RankLoop/og.png
 ---
 
 # 快速开始

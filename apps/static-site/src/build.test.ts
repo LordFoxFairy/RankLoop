@@ -149,6 +149,62 @@ describe('生成的 HTML', () => {
   })
 })
 
+describe('子路径部署（GitHub Pages）', () => {
+  // 站点在 /repo/ 子路径下时，正文里的 /about 会被解析成 域名/about —— 全是 404。
+  // 满页死链会被 Google 判定为低质量站点，是最容易被忽略的 SEO 杀手。
+  const PORTABLE = GOOD.replace('canonical: https://example.com/good\n', '')
+
+  it('改写站内链接以包含 base path', () => {
+    write('good.md', PORTABLE)
+    build({ contentDir, outDir, siteUrl: 'https://u.github.io/repo', siteName: 'T' })
+    const html = readFileSync(join(outDir, 'good/index.html'), 'utf8')
+    expect(html).toContain('href="/repo/x"')
+    expect(html).toContain('src="/repo/i.png"')
+  })
+
+  it('不改写外部链接', () => {
+    write('ext.md', PORTABLE.replace('[关键词研究](/x)', '[外部站点](https://other.com/page)'))
+    build({ contentDir, outDir, siteUrl: 'https://u.github.io/repo', siteName: 'T' })
+    const html = readFileSync(join(outDir, 'ext/index.html'), 'utf8')
+    expect(html).toContain('href="https://other.com/page"')
+    expect(html).not.toContain('/repo/https')
+  })
+
+  it('部署在根域名时不改写链接', () => {
+    write('good.md', GOOD)
+    build({ contentDir, outDir, siteUrl: SITE, siteName: 'T' })
+    const html = readFileSync(join(outDir, 'good/index.html'), 'utf8')
+    expect(html).toContain('href="/x"')
+    expect(html).not.toContain('/repo/')
+  })
+})
+
+describe('域名无关性', () => {
+  // 内容里写死域名，换域名时会全站触发 CANONICAL_CROSS_DOMAIN
+  const NO_CANON = GOOD.replace('canonical: https://example.com/good\n', '')
+
+  it('canonical 由 SITE_URL 生成，换域名不需要改内容', () => {
+    write('a.md', NO_CANON)
+    const r1 = build({ contentDir, outDir, siteUrl: 'https://one.com', siteName: 'T' })
+    const r2 = build({ contentDir, outDir, siteUrl: 'https://two.com', siteName: 'T' })
+    expect(r1.blocked).toBe(0)
+    expect(r2.blocked).toBe(0)
+    expect(readFileSync(join(outDir, 'a/index.html'), 'utf8')).toContain('https://two.com/a')
+  })
+
+  it('frontmatter 显式指定的 canonical 优先', () => {
+    write('b.md', GOOD)
+    build({ contentDir, outDir, siteUrl: SITE, siteName: 'T' })
+    expect(readFileSync(join(outDir, 'b/index.html'), 'utf8')).toContain('https://example.com/good')
+  })
+
+  it('缺省 og:image 由构建注入', () => {
+    write('c.md', NO_CANON.replace('  image: https://example.com/og.png\n', ''))
+    build({ contentDir, outDir, siteUrl: SITE, siteName: 'T', defaultOgImage: `${SITE}/og.png` })
+    expect(readFileSync(join(outDir, 'c/index.html'), 'utf8')).toContain('og:image')
+  })
+})
+
 describe('构建统计', () => {
   it('计算平均健康分', () => {
     write('good.md', GOOD)

@@ -1,12 +1,10 @@
 ---
 title: SEO 规则清单 — RankLoop 的 24 条检测规则说明
 description: 本文完整列出 RankLoop 使用的 24 条 SEO 检测规则，按严重、警告、建议三个级别分类，并说明每条规则的判定依据与修复方向。
-canonical: https://lordfoxfairy.github.io/RankLoop/rules
 lang: zh-CN
 og:
   title: SEO 规则清单
   description: 24 条检测规则说明
-  image: https://lordfoxfairy.github.io/RankLoop/og.png
 ---
 
 # SEO 规则清单
