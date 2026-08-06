@@ -10,26 +10,26 @@ RUN apt-get update \
 
 # ---------- 依赖 ----------
 FROM base AS deps
+# 复制全部 workspace 清单：漏掉任何一个都会导致其依赖缺失。
+# .dockerignore 已排除 node_modules 与 dist，因此整目录复制是安全的。
 COPY package.json package-lock.json ./
-COPY apps/api/package.json apps/api/
-COPY packages/db/package.json packages/db/
-COPY packages/seo-rules/package.json packages/seo-rules/
+COPY apps/ apps/
+COPY packages/ packages/
 RUN npm ci --include=dev
 
 # ---------- 构建 ----------
 FROM deps AS build
 COPY tsconfig.json ./
-COPY packages/ packages/
-COPY apps/ apps/
-# 根 build 脚本保证顺序：先 generate，再 seo-rules，最后 api
-RUN npm run build
+# 镜像只提供 API 服务，静态站生成器由 GitHub Actions 单独构建，此处无需编译
+RUN npm run generate \
+  && npm run build --workspace @rankloop/seo-rules \
+  && npm run build --workspace @rankloop/api
 
 # ---------- 生产依赖 ----------
 FROM base AS prod-deps
 COPY package.json package-lock.json ./
-COPY apps/api/package.json apps/api/
-COPY packages/db/package.json packages/db/
-COPY packages/seo-rules/package.json packages/seo-rules/
+COPY apps/ apps/
+COPY packages/ packages/
 RUN npm ci --omit=dev
 COPY packages/db/prisma packages/db/prisma
 RUN npx prisma generate --schema packages/db/prisma/schema.prisma
