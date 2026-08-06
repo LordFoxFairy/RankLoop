@@ -12,6 +12,11 @@ permissions:
   contents: read
   pull-requests: write
 
+# 同一 PR 有新提交时取消旧检测
+concurrency:
+  group: seo-check-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     runs-on: ubuntu-latest

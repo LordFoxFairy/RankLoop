@@ -2,14 +2,10 @@ name: 部署到 Cloudflare Pages
 
 # Cloudflare Pages 免费版：每月 500 次构建、100 个自定义域名、20000 个文件。
 # 不需要 Docker、不需要服务器；可绑根域名，因此没有 GitHub Pages 的子路径死链问题。
+#
+# 与 deploy-site.yml（GitHub Pages）二选一，避免两条流水线抢占队列。
+# 配好 CLOUDFLARE_API_TOKEN 后，把这里改成 push 触发、并停用 deploy-site.yml。
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'content/**'
-      - 'packages/seo-rules/**'
-      - 'apps/static-site/**'
-      - '.github/workflows/deploy-cloudflare.yml'
   workflow_dispatch:
 
 permissions:

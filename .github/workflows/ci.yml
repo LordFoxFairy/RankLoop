@@ -1,13 +1,30 @@
 name: CI
 
+# 只在真正需要时运行：
+#   - PR：代码变更才跑（改文档不跑）
+#   - tag：发版前的最终验证
+# main 分支的日常 push 不跑——代码已在 PR 阶段验证过，重复跑只是浪费队列。
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
+    paths:
+      - 'apps/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.json'
+      - '.github/workflows/ci.yml'
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+# 同一 PR 有新提交时取消旧运行，避免堆积
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build:
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,7 +42,9 @@ jobs:
 
       - run: npm run build
 
+  # Docker 构建很慢，只在发版标签上验证，PR 阶段不跑
   docker:
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
