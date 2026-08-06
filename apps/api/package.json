@@ -1,0 +1,19 @@
+{
+  "name": "@rankloop/api",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "@rankloop/seo-rules": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.3",
+    "vitest": "^3.2.7"
+  }
+}

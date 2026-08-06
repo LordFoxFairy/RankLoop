@@ -42,4 +42,5 @@ export function runRules(doc: SeoDocument): CheckResult {
 }
 
 export { RULES_VERSION, listRules } from './rules'
+export { parseContent, type ParseInput, type ParsedContent } from './parse'
 export * from './types'
