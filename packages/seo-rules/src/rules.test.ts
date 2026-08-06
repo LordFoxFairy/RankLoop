@@ -25,7 +25,7 @@ function validDoc(overrides: Partial<SeoDocument> = {}): SeoDocument {
         { href: '/third', internal: true },
         { href: 'https://external.com', internal: false },
       ],
-      text: '正文内容。'.repeat(50),
+      text: '正文内容详细说明这一主题。'.repeat(40),
     },
     jsonLd: ['{"@context":"https://schema.org","@type":"Article"}'],
     statusCode: 200,

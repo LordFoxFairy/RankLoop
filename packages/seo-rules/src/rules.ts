@@ -1,3 +1,4 @@
+import { extendedRules } from './rules-extended'
 import type { Rule, SeoDocument } from './types'
 
 /**
@@ -24,7 +25,7 @@ function resolveCanonical(canonical: string, pageUrl: string): URL | null {
   }
 }
 
-export const rules: Rule[] = [
+const baseRules: Rule[] = [
   {
     code: 'SERVER_ERROR',
     severity: 'critical',
@@ -272,7 +273,10 @@ export const rules: Rule[] = [
   },
 ]
 
-export const RULES_VERSION = '1.0.0'
+/** 基础规则 + 对齐主流工具的扩展规则 */
+export const rules: Rule[] = [...baseRules, ...extendedRules]
+
+export const RULES_VERSION = '1.1.0'
 
 /** 供 API 文档与第三方查询：返回规则清单及其含义 */
 export function listRules(): Array<Pick<Rule, 'code' | 'severity' | 'weight'>> {

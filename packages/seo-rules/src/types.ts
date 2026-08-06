@@ -25,7 +25,7 @@ export interface SeoDocument {
   body: {
     headings: Array<{ level: number; text: string }>
     images: Array<{ src: string; alt?: string }>
-    links: Array<{ href: string; internal: boolean }>
+    links: Array<{ href: string; internal: boolean; text?: string }>
     /** 纯文本正文，用于长度与空页面判定 */
     text: string
   }

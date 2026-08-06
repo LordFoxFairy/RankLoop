@@ -55,7 +55,9 @@ function extractBody($: cheerio.CheerioAPI, pageUrl: string): SeoDocument['body'
   const links: SeoDocument['body']['links'] = []
   $('a[href]').each((_, el) => {
     const href = $(el).attr('href')
-    if (href) links.push({ href, internal: isInternal(href, pageUrl) })
+    if (href) {
+      links.push({ href, internal: isInternal(href, pageUrl), text: $(el).text().trim() })
+    }
   })
 
   return { headings, images, links, text: $.root().text().replace(/\s+/g, ' ').trim() }
