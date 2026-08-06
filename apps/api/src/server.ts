@@ -14,7 +14,9 @@ import { seoChecker } from './infrastructure/seo-checker'
 import { createAuthMiddleware } from './lib/auth'
 import { type Env, loadEnv } from './lib/env'
 import { isDomainError, mapDomainError } from './interfaces/error-mapper'
+import { dashboardRoutes } from './interfaces/dashboard'
 import { contentRoutes } from './interfaces/routes/contents'
+import { statsRoutes } from './interfaces/routes/stats'
 import { openApiRoutes } from './interfaces/routes/openapi'
 
 /** 组合根：在此装配各层依赖，其余代码只依赖接口 */
@@ -81,6 +83,9 @@ export async function buildServer(env: Env, prisma: PrismaClient): Promise<Fasti
 
   await app.register(openApiRoutes, { prefix: '/api/v1' })
 
+  // 可视化面板（同进程提供，单容器单域名）
+  await app.register(dashboardRoutes)
+
   const service = buildContentService(prisma)
   const sites = new PrismaSiteRepository(prisma)
   const siteOrigin = async (siteId: string, workspaceId: string): Promise<string> => {
@@ -92,6 +97,7 @@ export async function buildServer(env: Env, prisma: PrismaClient): Promise<Fasti
     async (scoped) => {
       scoped.addHook('preHandler', createAuthMiddleware(prisma))
       await contentRoutes(scoped, service, siteOrigin)
+      await statsRoutes(scoped, prisma)
     },
     { prefix: '/api/v1' },
   )

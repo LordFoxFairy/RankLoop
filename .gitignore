@@ -34,3 +34,6 @@ Thumbs.db
 /coverage
 
 
+
+# Playwright MCP 运行产物
+.playwright-mcp/
