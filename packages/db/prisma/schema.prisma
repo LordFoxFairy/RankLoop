@@ -1,0 +1,304 @@
+// RankLoop SEO — 数据模型
+// 范围见 docs/ADR-001-内容托管闭环.md：MVP 只做托管闭环，crawl_* 相关表属二期。
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- 身份与租户 ----------
+
+model User {
+  id            String            @id @default(uuid()) @db.Uuid
+  // 邮箱唯一性不区分大小写：写入前统一转小写（规格 §6）
+  email         String            @unique
+  passwordHash  String            @map("password_hash")
+  displayName   String?           @map("display_name")
+  isPlatformAdmin Boolean         @default(false) @map("is_platform_admin")
+  disabledAt    DateTime?         @map("disabled_at") @db.Timestamptz
+  createdAt     DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime          @updatedAt @map("updated_at") @db.Timestamptz
+
+  memberships   WorkspaceMember[]
+  auditLogs     AuditLog[]
+
+  @@map("users")
+}
+
+model Workspace {
+  id        String            @id @default(uuid()) @db.Uuid
+  name      String
+  slug      String            @unique
+  createdAt DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime          @updatedAt @map("updated_at") @db.Timestamptz
+
+  members   WorkspaceMember[]
+  sites     Site[]
+  apiKeys   ApiKey[]
+  webhooks  Webhook[]
+  auditLogs AuditLog[]
+  quota     WorkspaceQuota?
+
+  @@map("workspaces")
+}
+
+enum WorkspaceRole {
+  owner
+  admin
+  editor
+  viewer
+}
+
+model WorkspaceMember {
+  id          String        @id @default(uuid()) @db.Uuid
+  workspaceId String        @map("workspace_id") @db.Uuid
+  userId      String        @map("user_id") @db.Uuid
+  role        WorkspaceRole
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz
+
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+  @@map("workspace_members")
+}
+
+model Invitation {
+  id          String        @id @default(uuid()) @db.Uuid
+  workspaceId String        @map("workspace_id") @db.Uuid
+  email       String
+  role        WorkspaceRole
+  codeHash    String        @map("code_hash")
+  expiresAt   DateTime      @map("expires_at") @db.Timestamptz
+  acceptedAt  DateTime?     @map("accepted_at") @db.Timestamptz
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([workspaceId])
+  @@map("invitations")
+}
+
+// ---------- 站点 ----------
+
+model Site {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  name        String
+  // 规范化 origin（scheme://host[:port]），同工作区内唯一（规格 §6）
+  origin      String
+  archivedAt  DateTime? @map("archived_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contents    Content[]
+  indexNowKey IndexNowKey?
+  indexNowSubmissions IndexNowSubmission[]
+
+  @@unique([workspaceId, origin])
+  @@map("sites")
+}
+
+// ---------- 托管内容（ADR-001 核心） ----------
+
+enum ContentFormat {
+  html
+  markdown
+}
+
+enum ContentStatus {
+  draft       // 已提交，未发布
+  published   // 已通过门槛并发布
+  archived
+}
+
+model Content {
+  id          String        @id @default(uuid()) @db.Uuid
+  siteId      String        @map("site_id") @db.Uuid
+  // 站内相对路径，规范化后同站点唯一
+  path        String
+  format      ContentFormat
+  status      ContentStatus @default(draft)
+  // 当前生效版本
+  currentVersionId String?  @unique @map("current_version_id") @db.Uuid
+  publishedAt DateTime?     @map("published_at") @db.Timestamptz
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime      @updatedAt @map("updated_at") @db.Timestamptz
+
+  site        Site          @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  versions    ContentVersion[] @relation("ContentVersions")
+  currentVersion ContentVersion? @relation("CurrentVersion", fields: [currentVersionId], references: [id])
+
+  @@unique([siteId, path])
+  @@index([siteId, status])
+  @@map("contents")
+}
+
+model ContentVersion {
+  id          String    @id @default(uuid()) @db.Uuid
+  contentId   String    @map("content_id") @db.Uuid
+  version     Int
+  // 正文原文。markdown 存 MD 源码，html 存 HTML 源码。
+  body        String
+  // Markdown frontmatter 解析结果 / HTML 提取的元数据
+  metadata    Json      @default("{}")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  content     Content   @relation("ContentVersions", fields: [contentId], references: [id], onDelete: Cascade)
+  currentOf   Content?  @relation("CurrentVersion")
+  checks      ContentCheck[]
+
+  @@unique([contentId, version])
+  @@map("content_versions")
+}
+
+model ContentCheck {
+  id          String   @id @default(uuid()) @db.Uuid
+  versionId   String   @map("version_id") @db.Uuid
+  // 健康分，由可配置权重计算（规格 §3.4：不得用不可解释的总分替代具体问题）
+  score       Int
+  criticalCount Int    @map("critical_count")
+  warningCount  Int    @map("warning_count")
+  noticeCount   Int    @map("notice_count")
+  // 完整问题列表：规则编码、级别、证据、修复建议
+  issues      Json
+  // 因输入格式限制而跳过的规则及原因（ADR-001 §3：不得产生假阳性）
+  skippedRules Json    @default("[]") @map("skipped_rules")
+  rulesVersion String  @map("rules_version")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  version     ContentVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@index([versionId])
+  @@map("content_checks")
+}
+
+// ---------- IndexNow ----------
+
+model IndexNowKey {
+  id        String   @id @default(uuid()) @db.Uuid
+  siteId    String   @unique @map("site_id") @db.Uuid
+  key       String
+  verifiedAt DateTime? @map("verified_at") @db.Timestamptz
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  site      Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@map("indexnow_keys")
+}
+
+enum SubmissionStatus {
+  queued
+  succeeded
+  failed
+}
+
+model IndexNowSubmission {
+  id          String           @id @default(uuid()) @db.Uuid
+  siteId      String           @map("site_id") @db.Uuid
+  urls        Json
+  event       String
+  status      SubmissionStatus @default(queued)
+  responseCode Int?            @map("response_code")
+  responseSummary String?      @map("response_summary")
+  // 幂等键，防止重复提交（规格 §7.4）
+  idempotencyKey String?       @map("idempotency_key")
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz
+
+  site        Site             @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@unique([siteId, idempotencyKey])
+  @@index([siteId, createdAt])
+  @@map("indexnow_submissions")
+}
+
+// ---------- API Key / Webhook / 审计 ----------
+
+model ApiKey {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  name        String
+  // 只存哈希与前缀，明文仅创建时展示一次（规格 §6、§8.2）
+  keyHash     String    @unique @map("key_hash")
+  keyPrefix   String    @map("key_prefix")
+  scopes      String[]
+  lastUsedAt  DateTime? @map("last_used_at") @db.Timestamptz
+  revokedAt   DateTime? @map("revoked_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("api_keys")
+}
+
+model Webhook {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  url         String
+  // HMAC-SHA256 签名密钥（规格 §7.5）
+  secret      String
+  events      String[]
+  enabled     Boolean   @default(true)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  deliveries  WebhookDelivery[]
+
+  @@index([workspaceId])
+  @@map("webhooks")
+}
+
+model WebhookDelivery {
+  id          String    @id @default(uuid()) @db.Uuid
+  webhookId   String    @map("webhook_id") @db.Uuid
+  eventId     String    @map("event_id")
+  event       String
+  payload     Json
+  statusCode  Int?      @map("status_code")
+  attempt     Int       @default(0)
+  deliveredAt DateTime? @map("delivered_at") @db.Timestamptz
+  nextRetryAt DateTime? @map("next_retry_at") @db.Timestamptz
+  error       String?
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  webhook     Webhook   @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([webhookId, createdAt])
+  @@map("webhook_deliveries")
+}
+
+model AuditLog {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String?   @map("workspace_id") @db.Uuid
+  userId      String?   @map("user_id") @db.Uuid
+  action      String
+  resource    String
+  resourceId  String?   @map("resource_id")
+  metadata    Json      @default("{}")
+  ip          String?
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  user        User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+  @@map("audit_logs")
+}
+
+model WorkspaceQuota {
+  id            String    @id @default(uuid()) @db.Uuid
+  workspaceId   String    @unique @map("workspace_id") @db.Uuid
+  maxSites      Int       @map("max_sites")
+  maxContents   Int       @map("max_contents")
+  dailyIndexNow Int       @map("daily_indexnow")
+  maxWebhooks   Int       @map("max_webhooks")
+
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("workspace_quotas")
+}

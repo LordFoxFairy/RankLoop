@@ -1,12 +1,13 @@
 # Dependencies
-/node_modules
+node_modules/
 /.pnp
 .pnp.js
 
 # Build output
-/dist
+dist/
 /out-tsc
 *.tsbuildinfo
+.vite/
 
 # Logs
 npm-debug.log*
@@ -31,3 +32,5 @@ Thumbs.db
 # Temp
 /tmp
 /coverage
+
+

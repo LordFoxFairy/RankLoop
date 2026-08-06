@@ -1,22 +1,24 @@
 {
   "name": "rankloop",
   "version": "1.0.0",
-  "description": "",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "description": "SEO 全生命周期管理平台",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "engines": {
     "node": ">=20"
   },
   "scripts": {
-    "build": "tsc",
-    "clean": "rm -rf dist",
-    "dev": "tsc --watch",
-    "typecheck": "tsc --noEmit",
-    "start": "node dist/index.js"
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "clean": "rm -rf dist apps/*/dist packages/*/dist"
   },
   "devDependencies": {
     "@types/node": "^22.20.1",
-    "typescript": "^5.5.3"
-  },
-  "private": true
+    "typescript": "^5.5.3",
+    "vitest": "^3.2.7"
+  }
 }

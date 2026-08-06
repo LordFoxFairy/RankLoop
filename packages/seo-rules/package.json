@@ -1,0 +1,16 @@
+{
+  "name": "@rankloop/seo-rules",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/engine.js",
+  "types": "dist/engine.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.3",
+    "vitest": "^3.2.7"
+  }
+}
