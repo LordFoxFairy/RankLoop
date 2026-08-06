@@ -49,6 +49,8 @@ COPY --from=prod-deps --chown=node:node /app/apps/api/node_modules apps/api/node
 # 只复制 dist 与清单，不含源码（规格 §10.2）
 COPY --from=build --chown=node:node /app/apps/api/dist apps/api/dist
 COPY --from=build --chown=node:node /app/packages/seo-rules/dist packages/seo-rules/dist
+# 控制台的 Alpine.js 与 Pico CSS（本地内置，无 CDN 依赖）
+COPY --chown=node:node apps/api/public apps/api/public
 COPY --chown=node:node apps/api/package.json apps/api/
 COPY --chown=node:node packages/seo-rules/package.json packages/seo-rules/
 COPY --chown=node:node packages/db/prisma packages/db/prisma

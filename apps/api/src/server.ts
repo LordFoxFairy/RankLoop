@@ -14,9 +14,12 @@ import { seoChecker } from './infrastructure/seo-checker'
 import { createAuthMiddleware } from './lib/auth'
 import { type Env, loadEnv } from './lib/env'
 import { isDomainError, mapDomainError } from './interfaces/error-mapper'
+import { consoleRoutes } from './interfaces/console'
 import { dashboardRoutes } from './interfaces/dashboard'
 import { contentRoutes } from './interfaces/routes/contents'
+import { startIndexNowWorker } from './infrastructure/indexnow-dispatcher'
 import { indexingRoutes } from './interfaces/routes/indexing'
+import { siteRoutes } from './interfaces/routes/sites'
 import { statsRoutes } from './interfaces/routes/stats'
 import { openApiRoutes } from './interfaces/routes/openapi'
 
@@ -43,6 +46,20 @@ export async function buildServer(env: Env, prisma: PrismaClient): Promise<Fasti
     bodyLimit: 2_100_000,
   })
 
+  // publish 等操作无需请求体；空 body 的 JSON 请求应视为 {} 而非报错
+  app.addContentTypeParser(
+    'application/json',
+    { parseAs: 'string' },
+    (_req, body: string, done) => {
+      if (!body || body.trim() === '') return done(null, {})
+      try {
+        done(null, JSON.parse(body))
+      } catch {
+        done(new ApiError(400, 'INVALID_JSON', '请求体不是合法 JSON', {}), undefined)
+      }
+    },
+  )
+
   app.setErrorHandler((error, req, reply) => {
     const mapped = isDomainError(error) ? mapDomainError(error) : error
 
@@ -53,9 +70,16 @@ export async function buildServer(env: Env, prisma: PrismaClient): Promise<Fasti
       })
     }
 
-    if ((error as { statusCode?: number }).statusCode === 429) {
-      return reply.code(429).send({
-        error: { code: 'RATE_LIMITED', message: '请求过于频繁', details: {} },
+    // Fastify 自身的 4xx（畸形 JSON、body 过大、空 body 等）应如实透传，
+    // 否则调用方看到 500 会以为是服务端故障，实际是请求本身的问题
+    const status = (error as { statusCode?: number }).statusCode
+    if (typeof status === 'number' && status >= 400 && status < 500) {
+      return reply.code(status).send({
+        error: {
+          code: (error as { code?: string }).code ?? 'BAD_REQUEST',
+          message: (error as Error).message,
+          details: {},
+        },
         meta: { request_id: req.id },
       })
     }
@@ -86,6 +110,7 @@ export async function buildServer(env: Env, prisma: PrismaClient): Promise<Fasti
 
   // 可视化面板（同进程提供，单容器单域名）
   await app.register(dashboardRoutes)
+  await app.register(consoleRoutes)
 
   const service = buildContentService(prisma)
   const sites = new PrismaSiteRepository(prisma)
@@ -100,6 +125,7 @@ export async function buildServer(env: Env, prisma: PrismaClient): Promise<Fasti
       await contentRoutes(scoped, service, siteOrigin)
       await statsRoutes(scoped, prisma)
       await indexingRoutes(scoped, prisma)
+      await siteRoutes(scoped, prisma)
     },
     { prefix: '/api/v1' },
   )
@@ -120,6 +146,10 @@ async function main(): Promise<void> {
   }
   process.on('SIGTERM', () => void shutdown('SIGTERM'))
   process.on('SIGINT', () => void shutdown('SIGINT'))
+
+  // 后台投递 IndexNow 提交（规格 §3.7：外部请求不阻塞 HTTP 线程）
+  const stopWorker = startIndexNowWorker(prisma)
+  app.addHook('onClose', async () => stopWorker())
 
   await app.listen({ port: env.PORT, host: '0.0.0.0' })
 }
