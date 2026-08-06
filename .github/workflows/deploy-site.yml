@@ -80,11 +80,14 @@ jobs:
       # IndexNow：Bing / Yandex / Seznam / Naver 支持，Google 不参与该协议。
       # 需要在仓库配置 INDEXNOW_KEY，并把 <key>.txt 放到站点根目录。
       - name: IndexNow 通知
-        if: ${{ vars.INDEXNOW_KEY != '' }}
         env:
           SITE_URL: ${{ needs.build.outputs.site_url }}
           KEY: ${{ vars.INDEXNOW_KEY }}
         run: |
+          if [ -z "$KEY" ]; then
+            echo "未配置 INDEXNOW_KEY，跳过 IndexNow 通知"
+            exit 0
+          fi
           HOST="$(echo "$SITE_URL" | sed -E 's#https?://([^/]+).*#\1#')"
           curl -sS -X POST https://api.indexnow.org/indexnow \
             -H 'Content-Type: application/json' \
@@ -93,12 +96,17 @@ jobs:
 
       # Google 不支持 IndexNow，只能通过 Search Console API 提交 sitemap。
       # 需要 GCP 服务账号并在 Search Console 中授权该账号为站点用户。
+      # secrets 不能出现在 if 条件里（Actions 表达式限制），
+      # 因此改为注入 env 后在脚本内部判空
       - name: 提交 sitemap 到 Google Search Console
-        if: ${{ secrets.GSC_SERVICE_ACCOUNT != '' }}
         env:
           SITE_URL: ${{ needs.build.outputs.site_url }}
           GSC_SERVICE_ACCOUNT: ${{ secrets.GSC_SERVICE_ACCOUNT }}
         run: |
+          if [ -z "$GSC_SERVICE_ACCOUNT" ]; then
+            echo "未配置 GSC_SERVICE_ACCOUNT，跳过 Google Search Console 提交"
+            exit 0
+          fi
           npm i -g google-auth-library@9 >/dev/null 2>&1
           node -e '
             const { JWT } = require("google-auth-library")
