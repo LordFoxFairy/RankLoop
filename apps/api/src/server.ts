@@ -1,11 +1,33 @@
 import { PrismaClient } from '@prisma/client'
-import Fastify, { type FastifyInstance } from 'fastify'
 import { listRules } from '@rankloop/seo-rules'
+import { ApiError } from './shared/errors'
+import Fastify, { type FastifyInstance } from 'fastify'
+import { ContentService } from './application/content-service'
+import {
+  PrismaContentRepository,
+  PrismaQuotaRepository,
+  PrismaSiteRepository,
+  systemClock,
+  uuidGenerator,
+} from './infrastructure/prisma-content-repository'
+import { seoChecker } from './infrastructure/seo-checker'
 import { createAuthMiddleware } from './lib/auth'
 import { type Env, loadEnv } from './lib/env'
-import { ApiError } from './lib/errors'
-import { contentRoutes } from './routes/contents'
-import { openApiRoutes } from './routes/openapi'
+import { isDomainError, mapDomainError } from './interfaces/error-mapper'
+import { contentRoutes } from './interfaces/routes/contents'
+import { openApiRoutes } from './interfaces/routes/openapi'
+
+/** 组合根：在此装配各层依赖，其余代码只依赖接口 */
+export function buildContentService(prisma: PrismaClient): ContentService {
+  return new ContentService({
+    contents: new PrismaContentRepository(prisma),
+    sites: new PrismaSiteRepository(prisma),
+    quotas: new PrismaQuotaRepository(prisma),
+    checker: seoChecker,
+    ids: uuidGenerator,
+    clock: systemClock,
+  })
+}
 
 export async function buildServer(env: Env, prisma: PrismaClient): Promise<FastifyInstance> {
   const app = Fastify({
@@ -19,9 +41,11 @@ export async function buildServer(env: Env, prisma: PrismaClient): Promise<Fasti
   })
 
   app.setErrorHandler((error, req, reply) => {
-    if (error instanceof ApiError) {
-      return reply.code(error.statusCode).send({
-        error: { code: error.code, message: error.message, details: error.details },
+    const mapped = isDomainError(error) ? mapDomainError(error) : error
+
+    if (mapped instanceof ApiError) {
+      return reply.code(mapped.statusCode).send({
+        error: { code: mapped.code, message: mapped.message, details: mapped.details },
         meta: { request_id: req.id },
       })
     }
@@ -57,10 +81,17 @@ export async function buildServer(env: Env, prisma: PrismaClient): Promise<Fasti
 
   await app.register(openApiRoutes, { prefix: '/api/v1' })
 
+  const service = buildContentService(prisma)
+  const sites = new PrismaSiteRepository(prisma)
+  const siteOrigin = async (siteId: string, workspaceId: string): Promise<string> => {
+    const site = await sites.findById(siteId, workspaceId)
+    return site?.origin ?? ''
+  }
+
   await app.register(
     async (scoped) => {
       scoped.addHook('preHandler', createAuthMiddleware(prisma))
-      await contentRoutes(scoped, prisma)
+      await contentRoutes(scoped, service, siteOrigin)
     },
     { prefix: '/api/v1' },
   )

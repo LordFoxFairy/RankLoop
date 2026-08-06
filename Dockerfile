@@ -1,17 +1,15 @@
 # syntax=docker/dockerfile:1
 
-# 统一镜像：通过启动命令区分 api / worker 进程（规格 §11.2）
 FROM node:22-bookworm-slim AS base
 WORKDIR /app
 ENV NODE_ENV=production
-# Prisma 需要 openssl 才能正确探测引擎版本，缺失会退化为 openssl-1.1.x 并告警
+# Prisma 需要 openssl 才能正确探测引擎版本，缺失会退化并告警
 RUN apt-get update \
   && apt-get install -y --no-install-recommends openssl ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
 # ---------- 依赖 ----------
 FROM base AS deps
-# 只复制清单文件，让依赖层在源码变动时仍能命中缓存
 COPY package.json package-lock.json ./
 COPY apps/api/package.json apps/api/
 COPY packages/db/package.json packages/db/
@@ -23,8 +21,7 @@ FROM deps AS build
 COPY tsconfig.json ./
 COPY packages/ packages/
 COPY apps/ apps/
-# 根 build 脚本负责顺序：先 generate，再按依赖顺序构建各包。
-# 不能用 --workspaces，其顺序不保证 seo-rules 先于依赖它的 api 构建。
+# 根 build 脚本保证顺序：先 generate，再 seo-rules，最后 api
 RUN npm run build
 
 # ---------- 生产依赖 ----------
@@ -34,7 +31,6 @@ COPY apps/api/package.json apps/api/
 COPY packages/db/package.json packages/db/
 COPY packages/seo-rules/package.json packages/seo-rules/
 RUN npm ci --omit=dev
-# 运行时需要 Prisma Client，必须在生产依赖中再生成一次
 COPY packages/db/prisma packages/db/prisma
 RUN npx prisma generate --schema packages/db/prisma/schema.prisma
 
@@ -47,6 +43,10 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 COPY --from=prod-deps --chown=node:node /app/node_modules node_modules
+# npm 对版本冲突的依赖不会提升到根，会装进 workspace 自己的 node_modules，
+# 漏拷则运行时 MODULE_NOT_FOUND（zod 就属于这种情况）
+COPY --from=prod-deps --chown=node:node /app/apps/api/node_modules apps/api/node_modules
+# 只复制 dist 与清单，不含源码（规格 §10.2）
 COPY --from=build --chown=node:node /app/apps/api/dist apps/api/dist
 COPY --from=build --chown=node:node /app/packages/seo-rules/dist packages/seo-rules/dist
 COPY --chown=node:node apps/api/package.json apps/api/

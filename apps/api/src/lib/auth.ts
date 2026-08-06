@@ -1,7 +1,7 @@
 import type { PrismaClient } from '@prisma/client'
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import { type ApiKeyScope, hashApiKey } from './api-key'
-import { errors } from './errors'
+import { type ApiKeyScope, hashApiKey } from '../shared'
+import { errors } from '../shared'
 
 /**
  * API Key 认证与授权。
