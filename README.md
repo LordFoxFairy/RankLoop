@@ -31,18 +31,24 @@ docker compose up -d --build
 docker compose exec api node /app/seed.mjs   # 输出 API Key，只显示一次
 ```
 
-打开 <http://127.0.0.1:8080/>，粘贴 API Key 即可看到可视化面板。
+打开 <http://127.0.0.1:8080/console>，粘贴 API Key 即可使用管理控制台。
 
-## 可视化面板
+## 管理控制台与可视化面板
 
-由 API 进程直接提供（单容器、单域名，无需额外构建）：
+两个界面均由 API 进程直接提供（单容器、单域名，无需额外构建）：
 
-- 平均健康分、内容总数、可发布数、被门槛拦截数
-- 30 天健康分趋势折线
-- 问题级别分布（严重 / 警告 / 建议）
-- 最常见问题排行
+**`/console` 管理控制台**（Alpine.js + Pico CSS，本地内置无 CDN）
 
-数据全部来自 `/api/v1/stats/*` 真实接口，无任何演示数据。
+- 总览：健康分、内容数、可发布/被拦截统计、常见问题排行
+- 站点：添加、查看、软删除
+- 内容：提交（HTML/Markdown）、查看检测详情、一键发布
+- API Key：创建、查看、吊销
+
+**`/` 可视化面板**（只读大屏）
+
+- 平均健康分、30 天趋势折线、问题级别分布
+
+数据全部来自 `/api/v1` 真实接口，无任何演示数据。
 
 ## 功能范围
 
@@ -54,9 +60,10 @@ docker compose exec api node /app/seed.mjs   # 输出 API Key，只显示一次
 - 发布门槛：critical 问题阻断发布
 - 无状态预检接口（不落库，供发布前反复试算）
 - Sitemap 与 robots.txt 自动生成
-- IndexNow 提交（含幂等与跨站 URL 拦截）
+- IndexNow 提交与**后台实际投递**（含幂等、跨站 URL 拦截、可重试/不可重试区分）
 - API Key 认证与 scope 授权、多租户隔离
-- 可视化面板
+- 管理控制台 + 可视化面板
+- 站点与 API Key 管理接口
 - OpenAPI 3.1 文档
 - Docker 一键部署 + GitHub Actions 自动构建镜像
 
@@ -70,7 +77,6 @@ docker compose exec api node /app/seed.mjs   # 输出 API Key，只显示一次
 
 - 外部站点抓取与 SSRF 防护
 - 网站所有权验证
-- IndexNow 队列实际投递（当前入库为 `queued`，如实返回，不伪造成功）
 - Google Search Console OAuth 与数据同步
 - Webhook 实际投递（签名与重试逻辑已实现并有测试）
 
@@ -107,6 +113,12 @@ Google 侧的收录仍取决于其自身抓取策略与内容质量。
 | POST | `/sites/:siteId/indexnow/key` | `indexing:write` | 配置 IndexNow Key |
 | POST | `/sites/:siteId/indexnow/submit` | `indexing:write` | 提交 URL（幂等） |
 | GET | `/sites/:siteId/indexnow/submissions` | `indexing:read` | 提交记录 |
+| GET | `/sites` | `sites:read` | 列出站点 |
+| POST | `/sites` | `sites:write` | 添加站点 |
+| DELETE | `/sites/:siteId` | `sites:write` | 归档站点（软删除） |
+| GET | `/api-keys` | `sites:read` | 列出 API Key（不含明文） |
+| POST | `/api-keys` | `sites:write` | 创建 Key（明文仅返回一次） |
+| DELETE | `/api-keys/:keyId` | `sites:write` | 吊销 Key |
 
 ### 示例：提交 → 修复 → 发布
 
@@ -157,8 +169,8 @@ og:
 apps/api/src/
   domain/          领域层：聚合根、值对象、领域异常、仓储接口（不依赖框架与数据库）
   application/     应用层：用例编排、事务边界
-  infrastructure/  基础设施层：Prisma 仓储实现、规则引擎适配
-  interfaces/      接口层：HTTP 路由、错误映射、可视化面板
+  infrastructure/  基础设施层：Prisma 仓储实现、规则引擎适配、IndexNow 投递
+  interfaces/      接口层：HTTP 路由、错误映射、管理控制台与面板
   shared/          跨层工具：URL 规范化、API Key、Webhook 签名
 packages/
   seo-rules/       规则引擎（输入无关，二期爬虫可直接复用）
@@ -173,7 +185,7 @@ packages/
 ```bash
 npm ci
 npm run generate     # 生成 Prisma Client，typecheck 依赖它
-npm test             # 150 个测试
+npm test             # 160 个测试
 npm run typecheck
 npm run build
 ```
