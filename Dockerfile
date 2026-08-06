@@ -4,6 +4,10 @@
 FROM node:22-bookworm-slim AS base
 WORKDIR /app
 ENV NODE_ENV=production
+# Prisma 需要 openssl 才能正确探测引擎版本，缺失会退化为 openssl-1.1.x 并告警
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends openssl ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
 
 # ---------- 依赖 ----------
 FROM base AS deps
@@ -19,8 +23,9 @@ FROM deps AS build
 COPY tsconfig.json ./
 COPY packages/ packages/
 COPY apps/ apps/
-# generate 必须在 build 之前：TypeScript 依赖 Prisma 生成的类型
-RUN npm run generate && npm run build --workspaces --if-present
+# 根 build 脚本负责顺序：先 generate，再按依赖顺序构建各包。
+# 不能用 --workspaces，其顺序不保证 seo-rules 先于依赖它的 api 构建。
+RUN npm run build
 
 # ---------- 生产依赖 ----------
 FROM base AS prod-deps
@@ -36,9 +41,9 @@ RUN npx prisma generate --schema packages/db/prisma/schema.prisma
 # ---------- 运行 ----------
 FROM base AS runner
 
-# 非 root 运行（规格 §10.2）。node 镜像自带 uid 1000 的 node 用户。
+# 健康检查需要 curl；openssl 已在 base 阶段安装
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends openssl curl \
+  && apt-get install -y --no-install-recommends curl \
   && rm -rf /var/lib/apt/lists/*
 
 COPY --from=prod-deps --chown=node:node /app/node_modules node_modules

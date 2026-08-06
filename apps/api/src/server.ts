@@ -5,6 +5,7 @@ import { createAuthMiddleware } from './lib/auth'
 import { type Env, loadEnv } from './lib/env'
 import { ApiError } from './lib/errors'
 import { contentRoutes } from './routes/contents'
+import { openApiRoutes } from './routes/openapi'
 
 export async function buildServer(env: Env, prisma: PrismaClient): Promise<FastifyInstance> {
   const app = Fastify({
@@ -53,6 +54,8 @@ export async function buildServer(env: Env, prisma: PrismaClient): Promise<Fasti
 
   // 规则清单公开可查，第三方据此理解检测标准
   app.get('/api/v1/rules', async () => ({ data: listRules() }))
+
+  await app.register(openApiRoutes, { prefix: '/api/v1' })
 
   await app.register(
     async (scoped) => {
