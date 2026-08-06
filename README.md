@@ -110,6 +110,9 @@ docker compose exec api node /app/seed.mjs   # 输出 API Key，只显示一次
 - 发布门槛：critical 问题阻断发布
 - 无状态预检接口（不落库，供发布前反复试算）
 - Sitemap 与 robots.txt 自动生成
+- **Google Search Console 全自动化**：验证所有权 → 添加站点 → 提交 sitemap → 回读确认
+- 静态站生成器（GitHub Pages / Cloudflare Pages 免费部署）
+- 配置驱动的站点自定义（导航、首页、配色，零代码）
 - IndexNow 提交与**后台实际投递**（含幂等、跨站 URL 拦截、可重试/不可重试区分）
 - API Key 认证与 scope 授权、多租户隔离
 - 管理控制台 + 可视化面板
@@ -126,9 +129,9 @@ docker compose exec api node /app/seed.mjs   # 输出 API Key，只显示一次
 尚未实现（二期）：
 
 - 外部站点抓取与 SSRF 防护
-- 网站所有权验证
-- Google Search Console OAuth 与数据同步
-- Webhook 实际投递（签名与重试逻辑已实现并有测试）
+- 网站所有权验证（针对用户自有站点；平台托管站点已支持 Google 自动验证）
+- Search Console 搜索表现数据同步（点击 / 曝光 / 排名，当前只做提交）
+- Webhook 实际投递（签名与重试逻辑已实现并有测试，缺投递器）
 
 详见 [docs/ADR-001-内容托管闭环.md](docs/ADR-001-内容托管闭环.md)。
 
