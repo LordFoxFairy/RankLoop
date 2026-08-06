@@ -44,6 +44,13 @@ jobs:
           SITE_NAME: ${{ vars.SITE_NAME || 'RankLoop SEO' }}
         run: node apps/static-site/dist/cli.js
 
+      # 验证文件随站点一起部署，Google 才能抓到它完成所有权验证
+      - name: 写入 Google 验证文件
+        env:
+          SITE_URL: ${{ vars.SITE_URL || 'https://rankloop.pages.dev' }}
+          GSC_SERVICE_ACCOUNT: ${{ secrets.GSC_SERVICE_ACCOUNT }}
+        run: node apps/static-site/dist/gsc-cli.js --write-token
+
       - name: 部署到 Cloudflare Pages
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -77,29 +84,8 @@ jobs:
             echo "未配置 INDEXNOW_KEY，跳过 IndexNow"
           fi
 
-          # Google 侧只能通过 Search Console API 提交 sitemap
-          if [ -n "$GSC_SERVICE_ACCOUNT" ]; then
-            npm i google-auth-library@9 >/dev/null 2>&1
-            node -e '
-              const { JWT } = require("google-auth-library")
-              const creds = JSON.parse(process.env.GSC_SERVICE_ACCOUNT)
-              const siteUrl = process.env.SITE_URL
-              const client = new JWT({
-                email: creds.client_email,
-                key: creds.private_key,
-                scopes: ["https://www.googleapis.com/auth/webmasters"],
-              })
-              const target = encodeURIComponent(siteUrl + "/")
-              const feed = encodeURIComponent(siteUrl + "/sitemap.xml")
-              client.request({
-                url: `https://www.googleapis.com/webmasters/v3/sites/${target}/sitemaps/${feed}`,
-                method: "PUT",
-              }).then(() => console.log("✓ sitemap 已提交 Google Search Console"))
-                .catch(e => { console.error("✗ 提交失败：", e.message); process.exitCode = 0 })
-            '
-          else
-            echo "未配置 GSC_SERVICE_ACCOUNT，跳过 Google Search Console 提交"
-          fi
+          # Google 侧：验证所有权 → 添加站点 → 提交 sitemap → 回读确认
+          node apps/static-site/dist/gsc-cli.js
 
       - name: 摘要
         run: |

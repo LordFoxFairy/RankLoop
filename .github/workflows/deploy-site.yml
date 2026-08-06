@@ -55,6 +55,13 @@ jobs:
           SITE_NAME: ${{ vars.SITE_NAME || github.event.repository.name }}
         run: node apps/static-site/dist/cli.js
 
+      # 验证文件必须随站点一起部署，Google 才能抓到它完成所有权验证
+      - name: 写入 Google 验证文件
+        env:
+          SITE_URL: ${{ steps.vars.outputs.site_url }}
+          GSC_SERVICE_ACCOUNT: ${{ secrets.GSC_SERVICE_ACCOUNT }}
+        run: node apps/static-site/dist/gsc-cli.js --write-token
+
       - uses: actions/configure-pages@v5
 
       - uses: actions/upload-pages-artifact@v3
@@ -77,6 +84,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
       # IndexNow：Bing / Yandex / Seznam / Naver 支持，Google 不参与该协议。
       # 需要在仓库配置 INDEXNOW_KEY，并把 <key>.txt 放到站点根目录。
       - name: IndexNow 通知
@@ -94,42 +106,21 @@ jobs:
             -d "{\"host\":\"$HOST\",\"key\":\"$KEY\",\"keyLocation\":\"$SITE_URL/$KEY.txt\",\"urlList\":[\"$SITE_URL/sitemap.xml\"]}" \
             -w '\nIndexNow HTTP %{http_code}\n' || true
 
-      # Google 不支持 IndexNow，只能通过 Search Console API 提交 sitemap。
-      # 需要 GCP 服务账号并在 Search Console 中授权该账号为站点用户。
-      # secrets 不能出现在 if 条件里（Actions 表达式限制），
-      # 因此改为注入 env 后在脚本内部判空
-      - name: 提交 sitemap 到 Google Search Console
+      # Google 不支持 IndexNow，只能通过 Search Console API。
+      # 自动完成：验证所有权 → 添加站点 → 提交 sitemap → 回读确认。
+      - name: Google Search Console 自动化
         env:
           SITE_URL: ${{ needs.build.outputs.site_url }}
           GSC_SERVICE_ACCOUNT: ${{ secrets.GSC_SERVICE_ACCOUNT }}
         run: |
           if [ -z "$GSC_SERVICE_ACCOUNT" ]; then
-            echo "未配置 GSC_SERVICE_ACCOUNT，跳过 Google Search Console 提交"
+            echo "未配置 GSC_SERVICE_ACCOUNT，跳过 Google Search Console 自动化"
             exit 0
           fi
-          npm i -g google-auth-library@9 >/dev/null 2>&1
-          node -e '
-            const { JWT } = require("google-auth-library")
-            const creds = JSON.parse(process.env.GSC_SERVICE_ACCOUNT)
-            const siteUrl = process.env.SITE_URL
-            const sitemap = `${siteUrl}/sitemap.xml`
-            const client = new JWT({
-              email: creds.client_email,
-              key: creds.private_key,
-              scopes: ["https://www.googleapis.com/auth/webmasters"],
-            })
-            const target = encodeURIComponent(siteUrl + "/")
-            const feed = encodeURIComponent(sitemap)
-            client.request({
-              url: `https://www.googleapis.com/webmasters/v3/sites/${target}/sitemaps/${feed}`,
-              method: "PUT",
-            }).then(() => console.log("✓ sitemap 已提交 Google Search Console"))
-              .catch(e => {
-                // 未授权或站点未验证时不应让整个发布失败
-                console.error("✗ 提交失败：", e.message)
-                process.exitCode = 0
-              })
-          '
+          npm ci
+          npm run build --workspace @rankloop/seo-rules
+          npm run build --workspace @rankloop/static-site
+          node apps/static-site/dist/gsc-cli.js
 
       - name: 说明
         run: |
