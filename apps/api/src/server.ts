@@ -16,6 +16,7 @@ import { type Env, loadEnv } from './lib/env'
 import { isDomainError, mapDomainError } from './interfaces/error-mapper'
 import { dashboardRoutes } from './interfaces/dashboard'
 import { contentRoutes } from './interfaces/routes/contents'
+import { indexingRoutes } from './interfaces/routes/indexing'
 import { statsRoutes } from './interfaces/routes/stats'
 import { openApiRoutes } from './interfaces/routes/openapi'
 
@@ -98,6 +99,7 @@ export async function buildServer(env: Env, prisma: PrismaClient): Promise<Fasti
       scoped.addHook('preHandler', createAuthMiddleware(prisma))
       await contentRoutes(scoped, service, siteOrigin)
       await statsRoutes(scoped, prisma)
+      await indexingRoutes(scoped, prisma)
     },
     { prefix: '/api/v1' },
   )
