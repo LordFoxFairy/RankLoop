@@ -1,6 +1,6 @@
 import type { PrismaClient } from '@prisma/client'
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import { type ApiKeyScope, hashApiKey } from '../shared'
+import { API_KEY_SCOPES, type ApiKeyScope, hashApiKey } from '../shared'
 import { errors } from '../shared'
 
 /**
@@ -16,10 +16,36 @@ declare module 'fastify' {
   }
 }
 
+/** 合法但必然不存在的 UUID：用于「该用户不属于任何工作区」 */
+const NO_WORKSPACE = '00000000-0000-0000-0000-000000000000'
+
 export function createAuthMiddleware(prisma: PrismaClient) {
   return async function authenticate(req: FastifyRequest, _reply: FastifyReply): Promise<void> {
     const header = req.headers.authorization
-    if (!header?.startsWith('Bearer ')) throw errors.unauthorized()
+
+    // 无 Bearer 头时回退到会话：控制台用 Cookie 登录，
+    // 第三方系统用 API Key。两者都要能访问同一批数据接口。
+    if (!header?.startsWith('Bearer ')) {
+      if (!req.user) throw errors.unauthorized()
+
+      // 会话用户在其所属工作区内拥有全部权限；
+      // 具体能改什么由工作区角色决定，而非 Key 的 scope。
+      const membership = await prisma.workspaceMember.findFirst({
+        where: { userId: req.user.id },
+        orderBy: { createdAt: 'asc' },
+        select: { workspaceId: true },
+      })
+
+      // 平台管理员可能不属于任何工作区（只管理不使用）。
+      // 用一个不存在的 UUID 而非空串——空串会让 Prisma 的 UUID 解析崩溃，
+      // 而不存在的 UUID 只会让查询返回空结果，这才是期望行为。
+      req.auth = {
+        workspaceId: membership?.workspaceId ?? NO_WORKSPACE,
+        scopes: [...API_KEY_SCOPES],
+        apiKeyId: '',
+      }
+      return
+    }
 
     const plaintext = header.slice(7).trim()
     if (!plaintext) throw errors.unauthorized()

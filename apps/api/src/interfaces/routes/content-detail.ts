@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@prisma/client'
 import type { FastifyInstance } from 'fastify'
+import { listRules, prioritize, summarizeImpact } from '@rankloop/seo-rules'
 import { requireScope } from '../../lib/auth'
 import { ApiError } from '../../shared/errors'
 
@@ -14,6 +15,61 @@ export async function contentDetailRoutes(
   app: FastifyInstance,
   prisma: PrismaClient,
 ): Promise<void> {
+  const weights = Object.fromEntries(listRules().map((r) => [r.code, r.weight]))
+
+  /**
+   * 优化建议：按性价比排序，告诉用户「先做哪个」。
+   *
+   * 一堆问题不等于知道从哪下手——权重说明能加多少分，
+   * 但修复成本差异极大，真正有用的是「每分钟能挽回多少分」。
+   */
+  app.get<{ Params: { contentId: string } }>(
+    '/contents/:contentId/recommendations',
+    { preHandler: requireScope('contents:read') },
+    async (req, reply) => {
+      const { workspaceId } = req.auth!
+      const content = await prisma.content.findFirst({
+        where: { id: req.params.contentId, site: { workspaceId } },
+        include: {
+          currentVersion: { include: { checks: { take: 1, orderBy: { createdAt: 'desc' } } } },
+        },
+      })
+      if (!content) throw new ApiError(404, 'NOT_FOUND', '内容不存在', {})
+
+      const check = content.currentVersion?.checks[0]
+      if (!check) {
+        return reply.send({
+          data: { items: [], impact: null, note: '该内容尚无检测结果' },
+          meta: { request_id: req.id },
+        })
+      }
+
+      const items = prioritize({
+        issues: (check.issues ?? []) as never,
+        weights,
+      })
+      const impact = summarizeImpact(check.score, items)
+
+      return reply.send({
+        data: {
+          items: items.map((i) => ({
+            code: i.code,
+            severity: i.severity,
+            message: i.message,
+            evidence: i.evidence,
+            recommendation: i.recommendation,
+            gain: i.gain,
+            minutes: i.minutes,
+            effort: i.effort,
+            blocking: i.blocking,
+          })),
+          impact,
+        },
+        meta: { request_id: req.id, count: items.length },
+      })
+    },
+  )
+
   /** 版本历史与分数变化曲线 */
   app.get<{ Params: { contentId: string } }>(
     '/contents/:contentId/versions',

@@ -159,6 +159,8 @@ export async function buildServer(env: Env, prisma: PrismaClient): Promise<Fasti
 
   await app.register(
     async (scoped) => {
+      // 先加载会话再校验凭据：管理员用 Cookie，第三方用 API Key
+      scoped.addHook('preHandler', createSessionMiddleware(prisma))
       scoped.addHook('preHandler', createAuthMiddleware(prisma))
       await contentRoutes(scoped, service, siteOrigin, prisma)
       await statsRoutes(scoped, prisma)

@@ -211,7 +211,7 @@ textarea{font-family:ui-monospace,monospace;font-size:12px;min-height:220px}
                     <td><span class="pill" :class="c.status==='published'?'p-ok':'p-draft'" x-text="c.status"></span></td>
                     <td class="right" :style="'color:'+scoreColor(c.score)" x-text="c.score ?? '—'"></td>
                     <td class="right">
-                      <button @click="inspect(c.id)" style="width:auto;padding:4px 10px;font-size:12px">详情</button>
+                      <button @click="inspect(c.id)" style="width:auto;padding:4px 10px;font-size:12px">优化建议</button>
                       <button @click="loadVersions(c.id)" style="width:auto;padding:4px 10px;font-size:12px" class="secondary">版本</button>
                       <button @click="publish(c.id)" x-show="c.status!=='published'"
                               style="width:auto;padding:4px 10px;font-size:12px">发布</button>
@@ -396,29 +396,51 @@ textarea{font-family:ui-monospace,monospace;font-size:12px;min-height:220px}
   </article>
 </dialog>
 
-<!-- 详情 -->
+<!-- 优化建议（按性价比排序） -->
 <dialog :open="detailOpen">
-  <article>
+  <article style="max-width:760px">
     <header><strong x-text="detail?.path"></strong>
       <span class="muted" x-text="' · v'+(detail?.version??'')"></span></header>
-    <template x-if="detail?.check">
-      <div>
-        <p>健康分 <strong :style="'color:'+scoreColor(detail.check.score)" x-text="detail.check.score"></strong>
-           · <span x-text="detail.publishable ? '可发布' : '被门槛拦截'"></span></p>
-        <template x-if="!detail.check.issues.length"><p class="muted">无问题</p></template>
-        <table x-show="detail.check.issues.length">
-          <thead><tr><th>规则</th><th>证据</th><th>修复建议</th></tr></thead>
-          <tbody><template x-for="i in detail.check.issues" :key="i.code">
-            <tr><td><span class="pill" :class="'p-'+i.severity" x-text="i.code"></span></td>
-                <td class="muted" x-text="i.evidence"></td>
-                <td x-text="i.recommendation"></td></tr>
-          </template></tbody>
-        </table>
-        <template x-if="detail.check.skipped_rules?.length">
-          <p class="muted" x-text="'已跳过 '+detail.check.skipped_rules.length+' 条规则（信息不足，未计入扣分）'"></p>
-        </template>
+
+    <template x-if="impact">
+      <div class="cards" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr))">
+        <article><h4>当前</h4>
+          <div class="big" :style="'color:'+scoreColor(impact.current)" x-text="impact.current"></div></article>
+        <article><h4>全部修完</h4>
+          <div class="big" style="color:#067647" x-text="impact.potential"></div>
+          <div class="muted" x-text="'约 '+impact.totalMinutes+' 分钟'"></div></article>
+        <article><h4>先做快的</h4>
+          <div class="big" style="color:#175cd3" x-text="impact.quickWin"></div>
+          <div class="muted" x-text="'仅需 '+impact.quickMinutes+' 分钟'"></div></article>
+        <article><h4>阻断发布</h4>
+          <div class="big" :style="'color:'+(impact.blockingCount?'#b42318':'#067647')"
+               x-text="impact.blockingCount"></div></article>
       </div>
     </template>
+
+    <template x-if="!recs.length"><div class="empty">无待优化项 🎉</div></template>
+    <template x-if="recs.length">
+      <table><thead><tr><th>优先做</th><th class="right">+分</th>
+        <th class="right">耗时</th><th>问题与建议</th></tr></thead>
+      <tbody><template x-for="(r,idx) in recs" :key="r.code">
+        <tr>
+          <td style="white-space:nowrap">
+            <strong x-text="(idx+1)+'.'"></strong>
+            <span class="pill" :class="'p-'+r.severity" x-text="r.code"></span>
+            <span class="pill p-critical" x-show="r.blocking">阻断</span>
+          </td>
+          <td class="right" style="color:#067647;font-weight:600" x-text="'+'+r.gain"></td>
+          <td class="right muted" x-text="r.minutes+' 分'"></td>
+          <td>
+            <div x-text="r.message"></div>
+            <div class="muted" style="margin-top:3px" x-text="r.evidence"></div>
+            <div style="margin-top:4px;font-size:12px;color:var(--pico-primary)"
+                 x-text="'→ '+r.recommendation"></div>
+          </td>
+        </tr>
+      </template></tbody></table>
+    </template>
+
     <footer><button @click="detailOpen=false" style="width:auto">关闭</button></footer>
   </article>
 </dialog>
@@ -487,9 +509,15 @@ function app() {
   return {
     me: null, error: '', notice: '', rulesCount: 0, tenants: [],
     perf: null, keywords: [], trend: [], searchDays: '28', syncing: false, auditRows: [],
+    recs: [], impact: null,
     tab: 'overview', tabs: [
-      { id: 'overview', label: '总览' }, { id: 'sites', label: '站点' },
-      { id: 'contents', label: '内容' }, { id: 'keys', label: 'API Key' },
+      { id: 'overview', label: '总览' },
+      { id: 'sites', label: '站点' },
+      { id: 'contents', label: '内容' },
+      { id: 'search', label: '搜索表现' },
+      { id: 'audit', label: '审计' },
+      { id: 'keys', label: 'API Key' },
+      { id: 'tenants', label: '租户' },
     ],
     stats: {}, sites: [], contents: [], keys: [], newKey: '',
     editorOpen: false, detailOpen: false, detail: null,
@@ -599,8 +627,16 @@ function app() {
 
     async inspect(id) {
       this.error = ''
-      try { this.detail = await this.api('/contents/' + id); this.detailOpen = true }
-      catch (e) { this.error = e.message }
+      try {
+        const [d, r] = await Promise.all([
+          this.api('/contents/' + id),
+          this.api('/contents/' + id + '/recommendations'),
+        ])
+        this.detail = d
+        this.recs = r.items ?? []
+        this.impact = r.impact
+        this.detailOpen = true
+      } catch (e) { this.error = e.message }
     },
 
     async publish(id) {
