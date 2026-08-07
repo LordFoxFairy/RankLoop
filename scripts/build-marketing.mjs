@@ -59,6 +59,54 @@ for (const [dir, html] of [
   writeFileSync(join(OUT, dir, 'index.html'), html)
 }
 
+// 控制台需要数据库与后端服务，静态站托管不了。
+// 但 Cloudflare Pages 会把找不到的路径回退到首页——用户点「进入控制台」
+// 看到营销页会以为坏了。放一个说明页，如实告诉他控制台在哪。
+const consoleUrl = process.env.CONSOLE_URL ?? ''
+mkdirSync(join(OUT, 'console'), { recursive: true })
+writeFileSync(
+  join(OUT, 'console/index.html'),
+  `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>控制台 — RankLoop</title>
+<meta name="description" content="RankLoop 控制台入口说明：控制台为动态应用，需要独立部署的 API 服务。">
+<meta name="robots" content="noindex">
+<style>
+:root{color-scheme:light dark;--fg:#0d1117;--bg:#fff;--muted:#5b6472;--line:#e6e9ee;
+ --surface:#f7f8fa;--accent:#1a5fd0}
+@media(prefers-color-scheme:dark){:root{--fg:#e8ebf0;--bg:#0c0f14;--muted:#9aa4b2;
+ --line:#232833;--surface:#131720;--accent:#5b9bf8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);display:flex;min-height:100vh;
+ align-items:center;justify-content:center;padding:24px;
+ font:16px/1.7 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+.card{max-width:520px;border:1px solid var(--line);border-radius:14px;padding:32px 34px;
+ background:var(--surface)}
+h1{font-size:1.5rem;margin:0 0 12px}
+p{color:var(--muted);font-size:14.8px;margin:0 0 16px}
+a{color:var(--accent)}
+.btn{display:inline-block;padding:10px 20px;border-radius:9px;background:var(--accent);
+ color:#fff;text-decoration:none;font-size:14.5px;font-weight:560}
+.back{display:inline-block;margin-left:14px;color:var(--muted);text-decoration:none;font-size:14px}
+code{background:var(--bg);padding:2px 7px;border-radius:5px;font-size:.88em;
+ font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+</style></head><body>
+<div class="card">
+<h1>控制台需要单独部署</h1>
+<p>控制台是动态应用，依赖数据库与后台任务，无法托管在静态站点上。
+本站（营销页与文档）由 Cloudflare Pages 提供，API 与控制台需部署到能运行容器的环境。</p>
+<p>仓库根目录的 <code>render.yaml</code> 已配置好数据库、缓存与迁移，
+可一键部署；详见 <code>DEPLOY.md</code>。</p>
+${
+  consoleUrl
+    ? `<p><a class="btn" href="${consoleUrl}">前往控制台</a>
+<a class="back" href="/">返回首页</a></p>`
+    : `<p><a class="btn" href="/docs">查看接入文档</a>
+<a class="back" href="/">返回首页</a></p>`
+}
+</div></body></html>\n`,
+)
+
 // 营销页引用 /img/*，静态站生成器不搬运它们
 if (existsSync('docs/images')) {
   mkdirSync(join(OUT, 'img'), { recursive: true })
