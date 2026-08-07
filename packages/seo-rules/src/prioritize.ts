@@ -37,6 +37,8 @@ const EFFORT_MINUTES: Record<string, number> = {
   // 需要逐项处理或写内容
   IMAGE_MISSING_ALT: 10,
   INVALID_JSON_LD: 10,
+  // 从零写一段 schema.org 标记比修语法错误更费时
+  MISSING_STRUCTURED_DATA: 15,
   FEW_INTERNAL_LINKS: 12,
   THIN_CONTENT: 25,
   EMPTY_CONTENT: 30,

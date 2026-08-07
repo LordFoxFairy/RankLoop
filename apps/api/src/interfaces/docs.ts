@@ -100,6 +100,14 @@ export function renderDocs(ruleCount: number): string {
 <title>开发者文档 — RankLoop</title>
 <meta name="description" content="RankLoop 接入文档：用 API Key 提交内容，立即获得 ${ruleCount} 条 SEO 规则的检测结果与修复建议，修复后重新提交并发布，达标内容自动进入 sitemap。">
 <link rel="canonical" href="/docs">
+<script type="application/ld+json">${JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'TechArticle',
+  headline: '开发者文档 — RankLoop',
+  description: 'RankLoop 开发者文档，涵盖 ' + ruleCount + ' 条 SEO 检测规则的接入与使用说明。',
+  inLanguage: 'zh-CN',
+  url: '/docs',
+}).replace(/</g, '\\u003c')}</script>
 <style>
 :root{color-scheme:light dark;--fg:#0d1117;--bg:#fff;--muted:#5b6472;--line:#e6e9ee;
  --surface:#f7f8fa;--accent:#1a5fd0;--ok:#067647;--warn:#b54708;--crit:#b42318;--max:900px}

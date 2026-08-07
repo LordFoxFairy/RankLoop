@@ -202,3 +202,30 @@ describe('扩展规则的整体约束', () => {
     }
   })
 })
+
+describe('MISSING_STRUCTURED_DATA', () => {
+  it('没有 JSON-LD 时提示——拿不到富媒体摘要会损失点击率', () => {
+    const issues = runRules(doc({ jsonLd: [] })).issues
+    expect(issues.find((i) => i.code === 'MISSING_STRUCTURED_DATA')).toBeTruthy()
+  })
+
+  it('有结构化数据时不提示', () => {
+    const issues = runRules(
+      doc({ jsonLd: ['{"@context":"https://schema.org","@type":"Article"}'] }),
+    ).issues
+    expect(issues.find((i) => i.code === 'MISSING_STRUCTURED_DATA')).toBeUndefined()
+  })
+
+  it('不阻断发布——没有结构化数据照样能被收录', () => {
+    const issue = runRules(doc({ jsonLd: [] })).issues.find(
+      (i) => i.code === 'MISSING_STRUCTURED_DATA',
+    )
+    expect(issue?.severity).toBe('notice')
+  })
+
+  it('与 INVALID_JSON_LD 互斥——语法错误时不重复报缺失', () => {
+    const issues = runRules(doc({ jsonLd: ['{bad json'] })).issues
+    expect(issues.find((i) => i.code === 'INVALID_JSON_LD')).toBeTruthy()
+    expect(issues.find((i) => i.code === 'MISSING_STRUCTURED_DATA')).toBeUndefined()
+  })
+})

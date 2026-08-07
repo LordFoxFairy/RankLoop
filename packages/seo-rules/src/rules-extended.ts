@@ -178,4 +178,29 @@ export const extendedRules: Rule[] = [
       }
     },
   },
+  {
+    /**
+     * 结构化数据缺失。
+     *
+     * INVALID_JSON_LD 只在「有 JSON-LD 但语法错」时触发，
+     * 一个字都没写的页面反而静默通过。但结构化数据决定能否拿到
+     * 富媒体摘要——同样排名下，带摘要的结果点击率明显更高，
+     * 这是少数能真正影响流量、且完全由内容方控制的技术项。
+     *
+     * 定为 notice：没有它页面照样收录，只是拿不到富媒体展示。
+     */
+    code: 'MISSING_STRUCTURED_DATA',
+    severity: 'notice',
+    weight: 3,
+    evaluate(doc) {
+      if (doc.jsonLd && doc.jsonLd.length > 0) return null
+      return {
+        message: '页面没有结构化数据，无法获得富媒体摘要',
+        evidence: '未找到任何 JSON-LD 片段',
+        recommendation:
+          '添加 schema.org 结构化数据（文章用 Article，产品用 Product），' +
+          '可用 Google 富媒体测试工具校验。',
+      }
+    },
+  },
 ]

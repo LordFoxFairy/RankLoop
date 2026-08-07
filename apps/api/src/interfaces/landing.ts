@@ -118,6 +118,15 @@ export function renderLanding(data: LandingData): string {
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="${escapeHtml(data.siteUrl)}/img/og-cover.png">
+<script type="application/ld+json">${JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'RankLoop',
+  applicationCategory: 'BusinessApplication',
+  description: `内容发布前自动执行 ${data.ruleCount} 条 SEO 规则检测，存在严重问题的内容无法发布。`,
+  url: `${data.siteUrl}/`,
+  operatingSystem: 'Web',
+}).replace(/</g, '\\u003c')}</script>
 <style>
 :root{
   color-scheme:light dark;

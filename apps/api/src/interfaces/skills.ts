@@ -108,6 +108,14 @@ export function renderSkills(ruleCount: number): string {
 <title>接入 AI Agent — RankLoop</title>
 <meta name="description" content="把 RankLoop 的 ${ruleCount} 条 SEO 规则接入 AI Agent：检测出问题后由 AI 自动修复并重新提交，形成闭环。">
 <link rel="canonical" href="/skills">
+<script type="application/ld+json">${JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'TechArticle',
+  headline: '接入 AI Agent — RankLoop',
+  description: 'RankLoop 接入 AI Agent，涵盖 ' + ruleCount + ' 条 SEO 检测规则的接入与使用说明。',
+  inLanguage: 'zh-CN',
+  url: '/skills',
+}).replace(/</g, '\\u003c')}</script>
 <style>
 :root{color-scheme:light dark;--fg:#0d1117;--bg:#fff;--muted:#5b6472;--line:#e6e9ee;
  --surface:#f7f8fa;--accent:#1a5fd0;--ok:#067647;--warn:#b54708;--max:900px}
