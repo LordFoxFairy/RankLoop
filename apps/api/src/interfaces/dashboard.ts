@@ -155,10 +155,12 @@ function severityBars(h) {
 
 function issueTable(list) {
   if (!list.length) return '<div class="empty">未发现问题 🎉</div>'
-  return '<table><thead><tr><th>规则</th><th>级别</th><th class="num">出现次数</th></tr></thead><tbody>' +
+  return '<table><thead><tr><th>规则</th><th>级别</th><th class="num">影响页面</th>' +
+    '<th class="num">可挽回</th></tr></thead><tbody>' +
     list.map((i) => '<tr><td><code>' + esc(i.code) + '</code></td>' +
       '<td><span class="tag ' + esc(i.severity) + '">' + esc(i.severity) + '</span></td>' +
-      '<td class="num">' + i.count + '</td></tr>').join('') + '</tbody></table>'
+      '<td class="num">' + i.count + '</td>' +
+      '<td class="num">+' + i.recoverable + '</td></tr>').join('') + '</tbody></table>'
 }
 
 async function load() {

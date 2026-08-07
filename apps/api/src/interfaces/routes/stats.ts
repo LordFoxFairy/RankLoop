@@ -1,5 +1,7 @@
 import type { PrismaClient } from '@prisma/client'
+import { listRules } from '@rankloop/seo-rules'
 import type { FastifyInstance } from 'fastify'
+import { aggregateTopIssues } from '../../domain/insight/top-issues'
 import { requireScope } from '../../lib/auth'
 
 /**
@@ -50,19 +52,13 @@ export async function statsRoutes(app: FastifyInstance, prisma: PrismaClient): P
         ? Math.round(current.reduce((sum, c) => sum + c.score, 0) / current.length)
         : null
 
-    // 问题分布：按规则编码聚合，供面板展示「最常见的问题」
-    const byRule = new Map<string, { code: string; severity: string; count: number }>()
-    for (const check of current) {
-      for (const issue of (check.issues ?? []) as Array<{ code: string; severity: string }>) {
-        const entry = byRule.get(issue.code) ?? {
-          code: issue.code,
-          severity: issue.severity,
-          count: 0,
-        }
-        entry.count += 1
-        byRule.set(issue.code, entry)
-      }
-    }
+    // 问题分布：聚合逻辑在领域层，便于脱离数据库测试排序口径
+    const topIssues = aggregateTopIssues({
+      checks: current.map((c) => ({
+        issues: (c.issues ?? []) as Array<{ code: string; severity: string }>,
+      })),
+      weights: Object.fromEntries(listRules().map((r) => [r.code, r.weight])),
+    })
 
     return reply.send({
       data: {
@@ -74,7 +70,7 @@ export async function statsRoutes(app: FastifyInstance, prisma: PrismaClient): P
           warning: current.reduce((s, c) => s + c.warningCount, 0),
           notice: current.reduce((s, c) => s + c.noticeCount, 0),
         },
-        top_issues: [...byRule.values()].sort((a, b) => b.count - a.count).slice(0, 10),
+        top_issues: topIssues,
         publishable: current.filter((c) => c.criticalCount === 0).length,
         blocked: current.filter((c) => c.criticalCount > 0).length,
       },

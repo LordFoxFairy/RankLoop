@@ -123,18 +123,21 @@ const HTML = String.raw`<!doctype html>
           </div>
 
           <div class="panel">
-            <div class="panel-head"><h2>最常出现的问题</h2>
+            <div class="panel-head"><h2>下一步该修什么</h2>
               <span class="sub" style="margin-left:auto;color:var(--muted);font-size:12px">
-                按出现次数排序</span></div>
+                阻断发布的优先，其余按可挽回分数排序</span></div>
             <template x-if="!stats.top_issues?.length">
               <div class="empty"><strong>没有待处理的问题</strong>所有内容都已通过检测</div>
             </template>
             <template x-if="stats.top_issues?.length">
-              <table><thead><tr><th>规则</th><th>级别</th><th class="num">出现</th></tr></thead>
+              <table><thead><tr><th>规则</th><th>级别</th><th class="num">影响页面</th>
+                <th class="num">可挽回</th><th class="num">预估耗时</th></tr></thead>
               <tbody><template x-for="i in stats.top_issues" :key="i.code">
                 <tr><td><code x-text="i.code"></code></td>
                     <td><span class="tag" :class="tagClass(i.severity)" x-text="sevLabel(i.severity)"></span></td>
-                    <td class="num" x-text="i.count"></td></tr>
+                    <td class="num" x-text="i.count"></td>
+                    <td class="num" style="color:var(--gain)" x-text="'+'+i.recoverable"></td>
+                    <td class="num" x-text="fmtMinutes(i.minutes)"></td></tr>
               </template></tbody></table>
             </template>
           </div>
@@ -773,6 +776,8 @@ function app() {
     },
     sevLabel(s) { return ({ critical: '严重', warning: '警告', notice: '建议' })[s] ?? s },
     tagClass(s) { return ({ critical: 't-blocked', warning: 't-warn', notice: 't-mute' })[s] ?? 't-mute' },
+    // 超过一小时用「1.5 小时」比「90 分钟」更容易估量工作量
+    fmtMinutes(m) { return m >= 60 ? (m / 60).toFixed(1).replace(/\.0$/, '') + ' 小时' : m + ' 分钟' },
     actionLabel(a) {
       return ({
         'content.created': '推送内容', 'content.updated': '更新内容',
