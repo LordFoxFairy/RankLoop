@@ -4,7 +4,17 @@ import { z } from 'zod'
 import { requireScope } from '../../lib/auth'
 import { API_KEY_SCOPES, generateApiKey } from '../../shared/api-key'
 import { ApiError } from '../../shared/errors'
+import { RESERVED_SLUGS, isValidSlug } from '../../domain/site/host-routing'
 import { normalizeOrigin } from '../../shared/url'
+
+/** 由站点名推导 slug：转小写、非字母数字转连字符、去重复与首尾连字符 */
+function deriveSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 63) || 'site'
+}
 import { badRequest } from '../error-mapper'
 
 /**
@@ -37,7 +47,14 @@ export async function siteRoutes(app: FastifyInstance, prisma: PrismaClient): Pr
 
   app.post('/sites', { preHandler: requireScope('sites:write') }, async (req, reply) => {
     const { workspaceId } = req.auth!
-    const schema = z.object({ name: z.string().min(1).max(120), origin: z.string().url() })
+    const schema = z.object({
+      name: z.string().min(1).max(120),
+      origin: z.string().url(),
+      // 子域名标识，决定访客地址 <slug>.<平台域名>；未提供时由站点名推导
+      slug: z.string().min(1).max(63).optional(),
+      // 自有域名（主推形态）。绑定后需验证才生效。
+      domain: z.string().min(3).max(253).optional(),
+    })
     const parsed = schema.safeParse(req.body)
     if (!parsed.success) throw badRequest(parsed.error.issues)
 
@@ -66,12 +83,32 @@ export async function siteRoutes(app: FastifyInstance, prisma: PrismaClient): Pr
       throw new ApiError(409, 'SITE_EXISTS', '该 origin 已存在站点', { site_id: existing.id })
     }
 
+    // slug 决定访客地址，必须全局唯一且不与平台保留名冲突
+    const slug = (parsed.data.slug ?? deriveSlug(parsed.data.name)).toLowerCase()
+    if (!isValidSlug(slug)) {
+      throw new ApiError(422, 'INVALID_SLUG', 'slug 只能包含小写字母、数字与连字符，且不可使用保留名', {
+        slug,
+        reserved: [...RESERVED_SLUGS].slice(0, 8),
+      })
+    }
+    if (await prisma.site.findUnique({ where: { slug } })) {
+      throw new ApiError(409, 'SLUG_TAKEN', '该 slug 已被占用，请换一个', { slug })
+    }
+
     const site = await prisma.site.create({
-      data: { workspaceId, name: parsed.data.name, origin },
+      data: { workspaceId, name: parsed.data.name, origin, slug, domain: parsed.data.domain },
     })
 
     return reply.code(201).send({
-      data: { id: site.id, name: site.name, origin: site.origin },
+      data: {
+        id: site.id,
+        name: site.name,
+        origin: site.origin,
+        slug: site.slug,
+        domain: site.domain,
+        // 自有域名需验证后才生效，未绑定时先用子域名访问
+        url: site.domain ? null : `https://${site.slug}.${process.env.PLATFORM_DOMAIN ?? 'rankloop.miaokit.cloud'}`,
+      },
       meta: { request_id: req.id },
     })
   })

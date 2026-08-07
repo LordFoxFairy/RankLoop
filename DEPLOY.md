@@ -61,7 +61,7 @@ docker compose exec api node /app/seed.mjs
 
 ```bash
 CF_API_TOKEN=xxx SERVER_IP=1.2.3.4 \
-  ./infra/scripts/cloudflare-setup.sh seo.miaokit.cloud
+  ./infra/scripts/cloudflare-setup.sh rankloop.miaokit.cloud
 ```
 
 脚本会配置：A 记录（开启代理）、SSL Full (strict)、
@@ -84,7 +84,7 @@ API 只监听 `127.0.0.1:8080`，不直接对外。Nginx 示例：
 ```nginx
 server {
     listen 443 ssl http2;
-    server_name seo.miaokit.cloud;
+    server_name rankloop.miaokit.cloud;
 
     ssl_certificate     /path/to/cloudflare-origin.pem;
     ssl_certificate_key /path/to/cloudflare-origin.key;
@@ -142,13 +142,13 @@ gunzip -c backup-20260806.sql.gz \
 
 ```bash
 # 1. 健康检查
-curl https://seo.miaokit.cloud/health/ready
+curl https://rankloop.miaokit.cloud/health/ready
 
 # 2. 规则接口（公开）
-curl https://seo.miaokit.cloud/api/v1/rules | head
+curl https://rankloop.miaokit.cloud/api/v1/rules | head
 
 # 3. 面板（浏览器打开，粘贴 API Key）
-open https://seo.miaokit.cloud/
+open https://rankloop.miaokit.cloud/
 ```
 
 ## 关于 Google SEO 验证

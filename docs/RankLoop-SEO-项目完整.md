@@ -914,7 +914,7 @@ Cloudflare 不直接运行本项目的普通 Docker 镜像。
 项目独立时推荐：
 
 ```text
-seo.miaokit.cloud
+rankloop.miaokit.cloud
 ```
 
 未来独立品牌域名确定后可迁移。应用必须通过 `APP_URL` 配置域名，不得硬编码。

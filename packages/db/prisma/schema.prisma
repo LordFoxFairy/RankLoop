@@ -36,6 +36,10 @@ model Workspace {
   id        String            @id @default(uuid()) @db.Uuid
   name      String
   slug      String            @unique
+  // 是否允许绑定自有域名。默认开启——自有域名是主推形态：
+  // 内容权重归客户自己的域名，SEO 效果远好于平台三级子域名。
+  // 平台管理员可对个别租户关闭。
+  customDomainEnabled Boolean @default(true) @map("custom_domain_enabled")
   createdAt DateTime          @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime          @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -97,12 +101,26 @@ model Site {
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
+  // 子域名标识：访客通过 <slug>.<平台域名> 访问。
+  // 这是兜底形态——三级子域名会把权重积累到平台域名下，
+  // 且 Google 视子域名为独立站点，租户需从零建立信任度。
+  // 因此仅在客户尚未绑定自有域名时使用。
+  // 全局唯一——两个站点用同一 slug 会导致访客看到错误租户的内容。
+  slug        String    @unique
+  // 自定义域名（主推形态）。权重归客户自己的域名，SEO 效果最优。
+  // 路由层对 slug 子域名与自定义域名走同一套 Host 查找逻辑。
+  domain      String?   @unique
+  domainVerifiedAt DateTime? @map("domain_verified_at") @db.Timestamptz
+  // 站点级展示配置：站点名、导航、主题色等，各租户独立
+  settings    Json      @default("{}")
+
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   contents    Content[]
   indexNowKey IndexNowKey?
   indexNowSubmissions IndexNowSubmission[]
 
   @@unique([workspaceId, origin])
+  @@index([domain])
   @@map("sites")
 }
 

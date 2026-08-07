@@ -1,20 +1,35 @@
 {
   "siteName": "RankLoop SEO",
-  "siteUrl": "https://lordfoxfairy.github.io/RankLoop",
+  "siteUrl": "https://rankloop.miaokit.cloud",
   "description": "内容发布前自动执行 SEO 规则检测，不合格无法发布",
   "lang": "zh-CN",
   "nav": [
-    { "label": "首页", "href": "/" },
-    { "label": "快速开始", "href": "/getting-started" },
-    { "label": "规则清单", "href": "/rules" },
-    { "label": "GitHub", "href": "https://github.com/LordFoxFairy/RankLoop" }
+    {
+      "label": "首页",
+      "href": "/"
+    },
+    {
+      "label": "快速开始",
+      "href": "/getting-started"
+    },
+    {
+      "label": "规则清单",
+      "href": "/rules"
+    }
   ],
   "home": {
     "title": "发布前拦住 SEO 问题",
     "subtitle": "24 条规则自动检测，存在严重问题的内容无法发布。合格内容自动进入 sitemap 并提交搜索引擎。",
     "actions": [
-      { "label": "快速开始", "href": "/getting-started", "primary": true },
-      { "label": "查看规则", "href": "/rules" }
+      {
+        "label": "快速开始",
+        "href": "/getting-started",
+        "primary": true
+      },
+      {
+        "label": "查看规则",
+        "href": "/rules"
+      }
     ]
   },
   "theme": {
@@ -22,5 +37,5 @@
     "contentWidth": "820px",
     "colorScheme": "auto"
   },
-  "footer": "由 <a href=\"https://github.com/LordFoxFairy/RankLoop\">RankLoop</a> 生成 · 全部页面通过 SEO 检测"
+  "footer": "RankLoop SEO · 全部页面通过 SEO 检测"
 }

@@ -171,7 +171,7 @@ ${navHtml(config, p.basePath)}
 ${p.isHome ? heroHtml(config, p.basePath) : ''}
 ${body}
 </main>
-<footer>${config.footer ?? `由 <a href="https://github.com/LordFoxFairy/RankLoop">RankLoop</a> 生成 · SEO 检测通过`}</footer>
+<footer>${config.footer ?? 'RankLoop SEO · 全部页面通过 SEO 检测'}</footer>
 </body>
 </html>
 `

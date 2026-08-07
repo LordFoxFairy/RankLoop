@@ -15,6 +15,7 @@ import { createAuthMiddleware } from './lib/auth'
 import { type Env, loadEnv } from './lib/env'
 import { isDomainError, mapDomainError } from './interfaces/error-mapper'
 import { consoleRoutes } from './interfaces/console'
+import { publicSiteRoutes } from './interfaces/public-site'
 import { dashboardRoutes } from './interfaces/dashboard'
 import { contentRoutes } from './interfaces/routes/contents'
 import { startIndexNowWorker } from './infrastructure/indexnow-dispatcher'
@@ -119,6 +120,11 @@ export async function buildServer(env: Env, prisma: PrismaClient): Promise<Fasti
     return site?.origin ?? ''
   }
 
+  // 多租户内容渲染：注册在最后，其通配路由不会拦截上面的具体路由
+  const platformDomain = (process.env.PLATFORM_DOMAIN ?? 'rankloop.miaokit.cloud')
+    .replace(/^https?:\/\//, '')
+    .replace(/\/$/, '')
+
   await app.register(
     async (scoped) => {
       scoped.addHook('preHandler', createAuthMiddleware(prisma))
@@ -129,6 +135,10 @@ export async function buildServer(env: Env, prisma: PrismaClient): Promise<Fasti
     },
     { prefix: '/api/v1' },
   )
+
+  await app.register(async (scoped) => {
+    await publicSiteRoutes(scoped, prisma, platformDomain)
+  })
 
   return app
 }
