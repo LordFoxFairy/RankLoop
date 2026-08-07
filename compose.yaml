@@ -87,6 +87,23 @@ services:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
 
+  # 临时公网隧道（可选）：让控制台在手机等设备上也能打开，无需任何账号。
+  # 用 profiles 隔离——默认不启动，需要时执行：
+  #   docker compose --profile tunnel up -d
+  #   docker compose logs tunnel | grep trycloudflare
+  # 地址随机且每次重启都变；长期在线请用 render.yaml 部署。
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    profiles: ["tunnel"]
+    restart: unless-stopped
+    command: ["tunnel", "--no-autoupdate", "--url", "http://api:8080"]
+    depends_on:
+      api:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
 volumes:
   postgres_data:
   redis_data:

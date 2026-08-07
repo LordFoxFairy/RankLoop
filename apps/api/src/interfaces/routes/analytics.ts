@@ -27,6 +27,20 @@ function buildGscClient(credentials: string) {
   })
 }
 
+/**
+ * 校验 siteId 是合法 UUID。
+ *
+ * 前端未选站点时会发出空 siteId，直接丢给 Prisma 查询会抛
+ * "Error creating UUID, invalid length"，最终返回 500——
+ * 让用户以为服务挂了，实际只是还没选。非法 ID 一律按 404 处理。
+ */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+function requireSiteId(siteId: string): string {
+  if (!UUID_RE.test(siteId)) throw new ApiError(404, 'NOT_FOUND', '站点不存在', {})
+  return siteId
+}
+
 export async function analyticsRoutes(
   app: FastifyInstance,
   prisma: PrismaClient,
@@ -38,7 +52,7 @@ export async function analyticsRoutes(
     async (req, reply) => {
       const { workspaceId } = req.auth!
       const site = await prisma.site.findFirst({
-        where: { id: req.params.siteId, workspaceId, archivedAt: null },
+        where: { id: requireSiteId(req.params.siteId), workspaceId, archivedAt: null },
       })
       if (!site) throw new ApiError(404, 'NOT_FOUND', '站点不存在', {})
 
@@ -111,7 +125,7 @@ export async function analyticsRoutes(
     async (req, reply) => {
       const { workspaceId } = req.auth!
       const site = await prisma.site.findFirst({
-        where: { id: req.params.siteId, workspaceId, archivedAt: null },
+        where: { id: requireSiteId(req.params.siteId), workspaceId, archivedAt: null },
       })
       if (!site) throw new ApiError(404, 'NOT_FOUND', '站点不存在', {})
 
@@ -140,7 +154,7 @@ export async function analyticsRoutes(
     async (req, reply) => {
       const { workspaceId } = req.auth!
       const site = await prisma.site.findFirst({
-        where: { id: req.params.siteId, workspaceId, archivedAt: null },
+        where: { id: requireSiteId(req.params.siteId), workspaceId, archivedAt: null },
       })
       if (!site) throw new ApiError(404, 'NOT_FOUND', '站点不存在', {})
 
@@ -220,7 +234,7 @@ export async function analyticsRoutes(
     async (req, reply) => {
       const { workspaceId } = req.auth!
       const site = await prisma.site.findFirst({
-        where: { id: req.params.siteId, workspaceId, archivedAt: null },
+        where: { id: requireSiteId(req.params.siteId), workspaceId, archivedAt: null },
       })
       if (!site) throw new ApiError(404, 'NOT_FOUND', '站点不存在', {})
 
