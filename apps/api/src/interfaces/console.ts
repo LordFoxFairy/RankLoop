@@ -334,6 +334,30 @@ const HTML = String.raw`<!doctype html>
               <strong>先选一个站点</strong>搜索数据按站点分别统计</div></div>
           </template>
 
+          <!-- 零数据引导：新站点最常见的状态。参考 Google Search Console——
+               与其显示空图表，不如说明数据什么时候来、现在该做什么。 -->
+          <template x-if="form.siteId && perf && !perf.clicks && !perf.impressions">
+            <div class="panel onboard">
+              <div class="ob-head">
+                <strong>还没有搜索数据</strong>
+                <span>这是新站点的正常状态，不是配置错误</span>
+              </div>
+              <ol class="ob-steps">
+                <li><b>内容被 Google 收录</b>
+                  <span>已发布内容会自动进入 sitemap 并提交。新域名通常需要数周，
+                        期间做什么都无法加速——Google 官方明确不保证收录时间。</span></li>
+                <li><b>产生展现与点击</b>
+                  <span>被收录后才会在搜索结果中出现。有展现即会在此显示。</span></li>
+                <li><b>数据回传</b>
+                  <span>Search Console 数据有 2–3 天延迟，最近几天的不会出现在结果中。</span></li>
+              </ol>
+              <div class="ob-now">
+                <b>现在能做的</b>：把内容健康分修到 90 以上、补齐结构化数据、增加内链，
+                这些是收录后能否排上去的前提条件。
+              </div>
+            </div>
+          </template>
+
           <template x-if="form.siteId && perf">
             <div>
               <div class="metrics">

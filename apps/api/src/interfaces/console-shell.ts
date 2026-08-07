@@ -159,6 +159,25 @@ code{font-family:var(--mono);font-size:12px;background:var(--paper);
 .rec-cost .g{font:680 15px/1.2 var(--mono);color:var(--gain)}
 .rec-cost .m{font-size:11.5px;color:var(--muted);margin-top:2px}
 
+/* 零数据引导：新站点没有搜索数据是常态，空图表不如讲清楚下一步 */
+.onboard{padding:22px 24px}
+.ob-head{margin-bottom:16px}
+.ob-head strong{display:block;font-size:15px;margin-bottom:4px}
+.ob-head span{font-size:13px;color:var(--muted)}
+.ob-steps{list-style:none;counter-reset:ob;padding:0;margin:0 0 16px}
+.ob-steps li{counter-increment:ob;position:relative;padding:0 0 14px 34px;
+  border-left:2px solid var(--line);margin-left:11px}
+.ob-steps li:last-child{border-left-color:transparent;padding-bottom:4px}
+.ob-steps li::before{content:counter(ob);position:absolute;left:-12px;top:-2px;
+  width:22px;height:22px;border-radius:50%;background:var(--paper);
+  border:1px solid var(--line);display:flex;align-items:center;justify-content:center;
+  font:600 11px/1 var(--mono);color:var(--muted)}
+.ob-steps b{display:block;font-size:13.5px;margin-bottom:3px}
+.ob-steps span{font-size:12.5px;color:var(--muted);line-height:1.6}
+.ob-now{background:var(--accent-soft);border-radius:9px;padding:12px 14px;
+  font-size:13px;line-height:1.65}
+.ob-now b{color:var(--accent)}
+
 /* 健康分主视觉：环形 + 分布 + 走势并排，参考 Ahrefs Site Audit 概览 */
 .hero-health{display:grid;grid-template-columns:auto 1fr;gap:30px;align-items:center;
   background:var(--surface);border:1px solid var(--line);border-radius:14px;
