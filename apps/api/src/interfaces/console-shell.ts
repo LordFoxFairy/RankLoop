@@ -253,9 +253,11 @@ code{font-family:var(--mono);font-size:12px;background:var(--paper);
 .potential{margin-top:14px}
 .pt-row{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:7px}
 .pt-v{font:680 15px/1 var(--mono);color:var(--gain)}
-.pt-bar{display:flex;height:9px;border-radius:5px;overflow:hidden;background:var(--line)}
-.pt-now{background:var(--accent)}
-.pt-gain{background:var(--gain);opacity:.42}
+/* 十格刻度：比连续条更容易读出「10 格里亮了几格」，
+   高分区也不会像满条那样失去区分度 */
+.gap-scale{display:flex;gap:4px}
+.gap-scale i{flex:1;height:9px;border-radius:3px;background:var(--line)}
+.gap-scale i.on{background:var(--gain)}
 .pt-note{font-size:12px;color:var(--muted);margin-top:7px}
 
 /* 发布之后：闭环后半段的紧凑展示，与「下一步该修什么」并列 */

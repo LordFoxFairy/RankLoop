@@ -149,17 +149,22 @@ const HTML = String.raw`<!doctype html>
               </template>
               <template x-if="scoreTrend.length < 2">
                 <div class="potential">
+                  <!-- 只画「还差多少」而非总量：98 分时画 98%+2% 的条毫无区分度，
+                       用户关心的是剩余差距，不是已完成的部分 -->
                   <div class="pt-row">
-                    <span class="hd-k">全部修完可达</span>
-                    <span class="pt-v" x-text="potentialScore()+' 分'"></span>
+                    <span class="hd-k">距离满分</span>
+                    <span class="pt-v" x-show="scoreGap()"
+                          x-text="'还差 '+scoreGap()+' 分'"></span>
+                    <span class="pt-v" x-show="!scoreGap()" style="color:var(--gain)">已达满分</span>
                   </div>
-                  <div class="pt-bar">
-                    <div class="pt-now" :style="'width:'+(stats.health?.average_score ?? 0)+'%'"></div>
-                    <div class="pt-gain" :style="'width:'+(potentialScore()-(stats.health?.average_score ?? 0))+'%'"></div>
+                  <div class="gap-scale">
+                    <template x-for="n in 10" :key="n">
+                      <i :class="n <= Math.round((stats.health?.average_score ?? 0)/10) ? 'on' : ''"></i>
+                    </template>
                   </div>
                   <div class="pt-note" x-show="totalFixMinutes()"
-                       x-text="'修完全部 '+(stats.top_issues?.length ?? 0)+' 类问题约需 '+fmtMinutes(totalFixMinutes())"></div>
-                  <div class="pt-note" x-show="!totalFixMinutes()">所有内容均已达标</div>
+                       x-text="'修完全部 '+(stats.top_issues?.length ?? 0)+' 类问题约需 '+fmtMinutes(totalFixMinutes())+'，可提升至 '+potentialScore()+' 分'"></div>
+                  <div class="pt-note" x-show="!totalFixMinutes()">所有内容均已达标，无待修问题</div>
                 </div>
               </template>
             </div>
@@ -862,6 +867,11 @@ function app() {
     impactWidth(i) {
       const total = this.stats.contents?.total || 1
       return Math.max(3, Math.min(100, (i.count / total) * 100)).toFixed(1)
+    },
+
+    /** 距离满分还差多少 */
+    scoreGap() {
+      return Math.max(0, 100 - (this.stats.health?.average_score ?? 0))
     },
 
     /** 全部修完能到的分数：上限 100 */
