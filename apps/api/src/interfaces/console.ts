@@ -167,6 +167,38 @@ const HTML = String.raw`<!doctype html>
               <div class="d" x-text="(stats.top_issues?.length ?? 0)+' 类问题'"></div></div>
           </div>
 
+          <!-- 发布之后：闭环后半段。没有数据时说明原因，而不是显示 0 -->
+          <div class="panel search-strip">
+            <div class="panel-head"><h2>发布之后</h2>
+              <span class="sub" style="margin-left:auto;color:var(--muted);font-size:12px">
+                近 28 天 · 全部站点</span></div>
+            <template x-if="searchSummary && (searchSummary.clicks || searchSummary.impressions)">
+              <div class="ss-grid">
+                <div class="ss"><div class="ss-k">点击</div>
+                  <div class="ss-v" x-text="searchSummary.clicks"></div>
+                  <template x-if="searchSummary.clicks_change_pct !== null">
+                    <div class="ss-d" :style="'color:'+(searchSummary.clicks_change>=0?'var(--gain)':'var(--blocked)')"
+                         x-text="(searchSummary.clicks_change>=0?'↑':'↓')+' '+Math.abs(searchSummary.clicks_change_pct)+'%'"></div>
+                  </template></div>
+                <div class="ss"><div class="ss-k">曝光</div>
+                  <div class="ss-v" x-text="searchSummary.impressions"></div></div>
+                <div class="ss"><div class="ss-k">点击率</div>
+                  <div class="ss-v" x-text="(searchSummary.ctr*100).toFixed(2)+'%'"></div></div>
+                <div class="ss"><div class="ss-k">平均排名</div>
+                  <div class="ss-v" :style="'color:'+posColor(searchSummary.position)"
+                       x-text="searchSummary.position || '—'"></div></div>
+              </div>
+            </template>
+            <template x-if="!searchSummary || (!searchSummary.clicks && !searchSummary.impressions)">
+              <div class="ss-wait">
+                <span x-text="searchSummary?.synced
+                  ? 'Search Console 已接通，但这些内容尚未产生展现。新站点通常需要数周。'
+                  : '尚未同步 Search Console 数据'"></span>
+                <button class="btn sm" @click="go('search')">查看详情</button>
+              </div>
+            </template>
+          </div>
+
           <div class="panel">
             <div class="panel-head"><h2>下一步该修什么</h2></div>
 
@@ -673,7 +705,7 @@ function app() {
   return {
     me: null, error: '', notice: '', rulesCount: 0, tenants: [],
     perf: null, keywords: [], trend: [], searchDays: '28', syncing: false, auditRows: [],
-    scoreTrend: [],
+    scoreTrend: [], searchSummary: null,
     recs: [], impact: null,
     tab: 'overview', tabs: [
       { id: 'overview', label: '总览' },
@@ -864,6 +896,8 @@ function app() {
         this.stats = await this.api('/stats/overview')
         // 走势与总览并行取：没有历史对比，单个分数说明不了变好还是变差
         this.scoreTrend = await this.api('/stats/trend?days=30').catch(() => [])
+        // 闭环后半段：发布之后的真实效果，总览页也该看得到
+        this.searchSummary = await this.api('/stats/search').catch(() => null)
         this.sites = await this.enrichSites(await this.api('/sites'))
         this.keys = await this.api('/api-keys').catch(() => [])
         if (this.me?.is_platform_admin) {

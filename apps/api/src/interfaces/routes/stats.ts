@@ -93,6 +93,71 @@ export async function statsRoutes(app: FastifyInstance, prisma: PrismaClient): P
   })
 
   /**
+   * 搜索表现汇总：跨全部站点。
+   *
+   * 总览页此前只讲「发布前」，闭环后半段要切到另一个页面才看得到，
+   * 等于把「发布后效果如何」这个最该被关注的问题藏了起来。
+   */
+  app.get('/stats/search', { preHandler: requireScope('analytics:read') }, async (req, reply) => {
+    const { workspaceId } = req.auth!
+    const siteScope = req.user?.isPlatformAdmin ? {} : { workspaceId }
+
+    const sites = await prisma.site.findMany({
+      where: { ...siteScope, archivedAt: null },
+      select: { id: true },
+    })
+    if (sites.length === 0) {
+      return reply.send({ data: null, meta: { request_id: req.id } })
+    }
+
+    const siteIds = sites.map((s) => s.id)
+    const days = 28
+    const since = new Date()
+    since.setUTCDate(since.getUTCDate() - days)
+    const prevSince = new Date(since)
+    prevSince.setUTCDate(prevSince.getUTCDate() - days)
+
+    const [current, previous, lastSync] = await Promise.all([
+      prisma.searchAnalytics.aggregate({
+        where: { siteId: { in: siteIds }, date: { gte: since } },
+        _sum: { clicks: true, impressions: true },
+        _avg: { position: true },
+      }),
+      prisma.searchAnalytics.aggregate({
+        where: { siteId: { in: siteIds }, date: { gte: prevSince, lt: since } },
+        _sum: { clicks: true, impressions: true },
+      }),
+      prisma.gscSyncJob.findFirst({
+        where: { siteId: { in: siteIds } },
+        orderBy: { startedAt: 'desc' },
+        select: { status: true, startedAt: true, rowsSynced: true },
+      }),
+    ])
+
+    const clicks = current._sum.clicks ?? 0
+    const impressions = current._sum.impressions ?? 0
+    const prevClicks = previous._sum.clicks ?? 0
+
+    return reply.send({
+      data: {
+        period_days: days,
+        clicks,
+        impressions,
+        // CTR 按汇总值算，平均每日 CTR 会失真
+        ctr: impressions > 0 ? Number((clicks / impressions).toFixed(4)) : 0,
+        position: Number((current._avg.position ?? 0).toFixed(1)),
+        clicks_change: clicks - prevClicks,
+        clicks_change_pct:
+          prevClicks > 0 ? Number((((clicks - prevClicks) / prevClicks) * 100).toFixed(1)) : null,
+        // 有没有同步过，决定前端显示「等待数据」还是「尚未配置」
+        synced: Boolean(lastSync),
+        last_sync_at: lastSync?.startedAt ?? null,
+      },
+      meta: { request_id: req.id },
+    })
+  })
+
+  /**
    * 分数趋势：按天聚合，供面板画折线。
    *
    * 每天取「该内容当天最后一次检测」再求均值，而非把当天所有检测

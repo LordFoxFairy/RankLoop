@@ -216,6 +216,19 @@ code{font-family:var(--mono);font-size:12px;background:var(--paper);
 .issue-meta{display:flex;gap:12px;flex-wrap:wrap;margin-top:4px;
   font-size:11.5px;color:var(--muted)}
 .issue-meta code{font-family:var(--mono);font-size:11px;opacity:.75}
+/* 发布之后：闭环后半段的紧凑展示，与「下一步该修什么」并列 */
+.search-strip{margin-bottom:16px}
+.ss-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+  gap:1px;background:var(--line)}
+.ss{background:var(--surface);padding:14px 18px}
+.ss-k{font-size:11.5px;color:var(--muted);text-transform:uppercase;
+  letter-spacing:.06em;font-weight:600;margin-bottom:6px}
+.ss-v{font:680 22px/1.1 var(--mono);letter-spacing:-.02em}
+.ss-d{font-size:12px;margin-top:4px;font-family:var(--mono)}
+.ss-wait{padding:16px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  font-size:13px;color:var(--muted)}
+.ss-wait button{margin-left:auto}
+
 /* 发布漏斗：四步串联，箭头连接表达流转关系 */
 .funnel{display:flex;align-items:stretch;gap:0;margin-top:14px}
 .fn-step{flex:1;text-align:center;padding:10px 6px;position:relative;
