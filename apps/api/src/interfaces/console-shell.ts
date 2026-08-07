@@ -163,7 +163,9 @@ code{font-family:var(--mono);font-size:12px;background:var(--paper);
 .hero-health{display:grid;grid-template-columns:auto 1fr;gap:30px;align-items:center;
   background:var(--surface);border:1px solid var(--line);border-radius:14px;
   padding:22px 26px;margin-bottom:16px}
-.ring-wrap{flex:none;display:flex;align-items:center;justify-content:center}
+.ring-wrap{flex:none;display:flex;align-items:center;justify-content:center;
+  width:132px;height:132px}
+.ring-wrap svg{width:100%;height:100%}
 .health-detail{min-width:0}
 .hd-row{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px}
 .hd-k{font-size:12.5px;color:var(--muted)}

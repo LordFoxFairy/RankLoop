@@ -108,7 +108,7 @@ const HTML = String.raw`<!doctype html>
           <!-- 健康分主视觉：参考 Ahrefs Site Audit，环形比数字更快传达
                「距离满分还差多少」；旁边配分布与走势，避免均值掩盖分化 -->
           <div class="hero-health">
-            <div class="ring-wrap" x-html="scoreRing(stats.health?.average_score, '132px')"></div>
+            <div class="ring-wrap" x-html="heroRing(stats.health?.average_score, '132px')"></div>
 
             <div class="health-detail">
               <div class="hd-row">
@@ -672,7 +672,8 @@ function app() {
      * 参考 Ahrefs Site Audit 的健康分展示：环形比数字更快传达
      * 「距离满分还差多少」。用 stroke-dasharray 画弧，无需图表库。
      */
-    scoreRing(score, size) {
+    /** 主视觉大环。与卡片用的小环 scoreRing 分开——同名会被后定义的覆盖 */
+    heroRing(score, size) {
       const s = score ?? 0
       const r = 42, c = 2 * Math.PI * r
       const dash = (s / 100) * c
