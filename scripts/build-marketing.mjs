@@ -9,19 +9,34 @@
  *
  * 用法：
  *   npm run build --workspace @rankloop/seo-rules
- *   npm run build --workspace @rankloop/api
  *   node apps/static-site/dist/cli.js      # 先出 content/*.md 的页面
  *   node scripts/build-marketing.mjs       # 再覆盖首页并补齐其余页面
+ *
+ * 这三个页面模块只依赖 fastify 的类型（无运行时依赖、不碰 Prisma），
+ * 因此单独编译即可——不必先 build 整个 API。那样会要求
+ * prisma generate，而 npm ci 装的是 any 存根，CI 里必然编译失败。
  */
 
-import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createRequire } from 'node:module'
+import { tmpdir } from 'node:os'
 
 const require = createRequire(import.meta.url)
-const { renderLanding } = require('../apps/api/dist/interfaces/landing.js')
-const { renderDocs } = require('../apps/api/dist/interfaces/docs.js')
-const { renderSkills } = require('../apps/api/dist/interfaces/skills.js')
+
+const TMP = join(tmpdir(), 'rankloop-marketing-build')
+rmSync(TMP, { recursive: true, force: true })
+execFileSync(
+  'npx',
+  ['tsc', ...['landing', 'docs', 'skills'].map((n) => `apps/api/src/interfaces/${n}.ts`),
+   '--outDir', TMP, '--module', 'commonjs', '--target', 'es2022', '--skipLibCheck'],
+  { stdio: 'inherit' },
+)
+
+const { renderLanding } = require(join(TMP, 'landing.js'))
+const { renderDocs } = require(join(TMP, 'docs.js'))
+const { renderSkills } = require(join(TMP, 'skills.js'))
 const { listRules, parseContent, runRules } = require('../packages/seo-rules/dist/engine.js')
 
 const OUT = process.env.OUT_DIR ?? 'dist-site'

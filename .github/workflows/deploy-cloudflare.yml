@@ -39,7 +39,6 @@ jobs:
           SITE_URL: ${{ vars.SITE_URL || 'https://rankloop.pages.dev' }}
           SITE_NAME: ${{ vars.SITE_NAME || 'RankLoop SEO' }}
         run: |
-          npm run build --workspace @rankloop/api
           node apps/static-site/dist/cli.js
           node scripts/build-marketing.mjs
 

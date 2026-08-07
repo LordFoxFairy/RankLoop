@@ -58,7 +58,6 @@ jobs:
           SITE_URL: ${{ steps.vars.outputs.site_url }}
           SITE_NAME: ${{ vars.SITE_NAME || github.event.repository.name }}
         run: |
-          npm run build --workspace @rankloop/api
           node apps/static-site/dist/cli.js
           node scripts/build-marketing.mjs
 
