@@ -43,6 +43,9 @@ const EFFORT_MINUTES: Record<string, number> = {
   TITLE_TOPIC_MISMATCH: 10,
   // 要先找到合适的权威来源
   NO_EXTERNAL_REFERENCES: 12,
+  // 要通读全文改写重复表达
+  KEYWORD_STUFFING: 20,
+  TOO_MANY_LINKS: 8,
   FEW_INTERNAL_LINKS: 12,
   THIN_CONTENT: 25,
   EMPTY_CONTENT: 30,

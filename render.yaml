@@ -64,7 +64,9 @@ services:
         generateValue: true
       - key: INITIAL_ADMIN_EMAIL
         sync: false
-      # 首次启动创建管理员；随机生成后在 Render 控制台查看
+      # 首次启动自动创建平台管理员（bootstrap-admin.ts）。
+      # Render 生成的随机值满足强度要求，可在服务的 Environment 页查看；
+      # 登录后请立即修改。已存在管理员时不会被覆盖。
       - key: INITIAL_ADMIN_PASSWORD
         generateValue: true
       # 可选：配置后自动回读 Search Console 数据并提交 sitemap

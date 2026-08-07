@@ -280,4 +280,70 @@ export const extendedRules: Rule[] = [
       }
     },
   },
+  {
+    /**
+     * 关键词堆砌。
+     *
+     * 这条与其他规则方向相反：别的规则是「缺什么」，这条是「过头了」。
+     * Google 明确把关键词堆砌列为垃圾内容手法，判定后可能降权——
+     * 比排不上去更糟，是主动惹麻烦。
+     *
+     * 只在正文足够长时判定：短文里某个词占比高是正常的。
+     */
+    code: 'KEYWORD_STUFFING',
+    severity: 'warning',
+    weight: 10,
+    evaluate(doc) {
+      const text = doc.body.text
+      // 样本太小时比例不可靠，跳过而非误判
+      if (text.length < 400) {
+        return { code: 'KEYWORD_STUFFING', reason: '正文过短，词频比例不具统计意义' }
+      }
+
+      const tokens = [...tokenize(text)]
+      if (tokens.length === 0) return null
+
+      // 统计每个词在正文中的出现次数
+      const total = text.length
+      let worst = { token: '', ratio: 0 }
+      for (const t of tokens) {
+        // 单字中文噪声太大（如「的」「了」），只看长度 ≥2 的词
+        if (t.length < 2) continue
+        const count = text.split(t).length - 1
+        const ratio = (count * t.length) / total
+        if (ratio > worst.ratio) worst = { token: t, ratio }
+      }
+
+      // 单个词占正文 8% 以上属异常；正常写作极少超过 5%
+      if (worst.ratio < 0.08) return null
+
+      return {
+        message: '疑似关键词堆砌，可能被判定为操纵排名',
+        evidence: `「${worst.token}」占正文约 ${Math.round(worst.ratio * 100)}%`,
+        recommendation:
+          '用同义词与自然表达替换重复词，围绕用户问题写作而非围绕关键词密度。',
+      }
+    },
+  },
+  {
+    /**
+     * 单页链接过多。
+     *
+     * 页面权重在出链之间分配，链接越多每条分到的越少。
+     * 导航页链接多是正常的，但正文里堆几百个链接会稀释权重，
+     * 也让 Google 难以判断哪些是重点。
+     */
+    code: 'TOO_MANY_LINKS',
+    severity: 'notice',
+    weight: 2,
+    evaluate(doc) {
+      const total = doc.body.links.length
+      if (total <= 100) return null
+      return {
+        message: '链接数量过多，页面权重被稀释',
+        evidence: `共 ${total} 个链接，建议控制在 100 个以内`,
+        recommendation: '精简链接，只保留与本页主题真正相关的，其余移到专门的索引页。',
+      }
+    },
+  },
 ]

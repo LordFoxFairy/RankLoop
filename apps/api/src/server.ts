@@ -25,6 +25,7 @@ import { GSC_WRITE_SCOPE } from './infrastructure/gsc-sitemap'
 import { startGscSyncWorker } from './infrastructure/gsc-sync'
 import { startIndexNowWorker } from './infrastructure/indexnow-dispatcher'
 import { createIndexNotifier } from './infrastructure/prisma-index-notifier'
+import { bootstrapAdmin } from './infrastructure/bootstrap-admin'
 import { startWebhookWorker } from './infrastructure/webhook-dispatcher'
 import { indexingRoutes } from './interfaces/routes/indexing'
 import { analyticsRoutes } from './interfaces/routes/analytics'
@@ -193,6 +194,21 @@ async function main(): Promise<void> {
   const env = loadEnv()
   const prisma = new PrismaClient()
   const app = await buildServer(env, prisma)
+
+  // 首次部署创建管理员：不开放自助注册，没有这一步就没人能登录，
+  // 也就无法创建租户、分配 API Key。
+  const admin = await bootstrapAdmin(prisma, {
+    email: process.env.INITIAL_ADMIN_EMAIL,
+    password: process.env.INITIAL_ADMIN_PASSWORD,
+  })
+  if (admin.created) {
+    app.log.info({ email: admin.email }, '已创建初始平台管理员，请立即登录并修改密码')
+  } else if (admin.reason?.includes('不合要求')) {
+    // 密码太弱导致没建成，必须让部署者看见，否则会以为账号已就绪
+    app.log.error({ reason: admin.reason }, '初始管理员创建失败')
+  } else {
+    app.log.info({ reason: admin.reason }, '跳过初始管理员创建')
+  }
 
   const shutdown = async (signal: string) => {
     app.log.info({ signal }, 'shutting down')
