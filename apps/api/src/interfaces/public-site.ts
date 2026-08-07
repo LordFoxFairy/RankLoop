@@ -1,5 +1,3 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
-import { extname, join } from 'node:path'
 import type { PrismaClient } from '@prisma/client'
 import { parseContent } from '@rankloop/seo-rules'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
@@ -156,35 +154,6 @@ export async function publicSiteRoutes(
   prisma: PrismaClient,
   platformDomain: string,
 ): Promise<void> {
-  /**
-   * 静态图片。
-   *
-   * 租户页面里的 <img src="/img/..."> 此前无人处理——图片路由只注册在
-   * 控制台作用域，按 Host 路由的租户站点拿到的是 404，页面图全裂。
-   */
-  const imgDir = join(__dirname, '../../public/img')
-  if (existsSync(imgDir)) {
-    const TYPES: Record<string, string> = {
-      '.png': 'image/png',
-      '.jpg': 'image/jpeg',
-      '.jpeg': 'image/jpeg',
-      '.svg': 'image/svg+xml',
-      '.webp': 'image/webp',
-      '.ico': 'image/x-icon',
-    }
-    for (const file of readdirSync(imgDir)) {
-      const type = TYPES[extname(file).toLowerCase()]
-      if (!type) continue
-      // 二进制读取：PNG 按 utf8 读会损坏
-      const buf = readFileSync(join(imgDir, file))
-      app.get(`/img/${file}`, async (_req, reply) =>
-        reply
-          .type(type)
-          .header('cache-control', 'public, max-age=31536000, immutable')
-          .send(buf),
-      )
-    }
-  }
 
   /** 租户 sitemap：只含已发布内容 */
   app.get('/sitemap.xml', async (req, reply) => {

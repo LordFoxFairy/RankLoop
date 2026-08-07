@@ -1311,31 +1311,43 @@ export async function consoleRoutes(app: FastifyInstance): Promise<void> {
 
   // 品牌图片：启动时读入内存并注册路由。
   // 遍历目录而非逐个列出，新增图片无需改代码。
-  const imgDir = join(assetDir, 'img')
-  if (existsSync(imgDir)) {
-    const TYPES: Record<string, string> = {
-      '.png': 'image/png',
-      '.jpg': 'image/jpeg',
-      '.jpeg': 'image/jpeg',
-      '.svg': 'image/svg+xml',
-      '.webp': 'image/webp',
-    }
-    for (const file of readdirSync(imgDir)) {
-      const type = TYPES[extname(file).toLowerCase()]
-      if (!type) continue
-      // 二进制读取：PNG 按 utf8 读会损坏
-      const buf = readFileSync(join(imgDir, file))
-      app.get(`/img/${file}`, async (_req, reply) =>
-        reply
-          .type(type)
-          .header('cache-control', 'public, max-age=31536000, immutable')
-          .send(buf),
-      )
-    }
-  }
 
   app.get('/assets/alpine.js', asset('alpine.js', 'application/javascript; charset=utf-8'))
   app.get('/assets/pico.css', asset('pico.css', 'text/css; charset=utf-8'))
 
   app.get('/console', async (_req, reply) => reply.type('text/html; charset=utf-8').send(HTML))
+}
+
+/**
+ * 静态图片路由。
+ *
+ * 必须注册在全局作用域：租户站点按 Host 路由，页面里的 <img src="/img/...">
+ * 若只在控制台作用域注册，租户域名下一律 404，图全裂。
+ * 同一路径不能注册两次，因此抽成独立函数由组合根调用一次。
+ */
+export async function imageRoutes(app: FastifyInstance): Promise<void> {
+  const imgDir = join(__dirname, '../../public/img')
+  if (!existsSync(imgDir)) return
+
+  const TYPES: Record<string, string> = {
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.svg': 'image/svg+xml',
+    '.webp': 'image/webp',
+    '.ico': 'image/x-icon',
+  }
+
+  for (const file of readdirSync(imgDir)) {
+    const type = TYPES[extname(file).toLowerCase()]
+    if (!type) continue
+    // 二进制读取：PNG 按 utf8 读会损坏
+    const buf = readFileSync(join(imgDir, file))
+    app.get(`/img/${file}`, async (_req, reply) =>
+      reply
+        .type(type)
+        .header('cache-control', 'public, max-age=31536000, immutable')
+        .send(buf),
+    )
+  }
 }

@@ -14,7 +14,7 @@ import { seoChecker } from './infrastructure/seo-checker'
 import { createAuthMiddleware } from './lib/auth'
 import { type Env, loadEnv } from './lib/env'
 import { isDomainError, mapDomainError } from './interfaces/error-mapper'
-import { consoleRoutes } from './interfaces/console'
+import { consoleRoutes, imageRoutes } from './interfaces/console'
 import { publicSiteRoutes } from './interfaces/public-site'
 import { dashboardRoutes } from './interfaces/dashboard'
 import { docsRoutes } from './interfaces/docs'
@@ -149,6 +149,9 @@ export async function buildServer(env: Env, prisma: PrismaClient): Promise<Fasti
     await docsRoutes(scoped, listRules().length)
     await skillsRoutes(scoped, listRules().length)
   })
+
+  // 图片注册在全局：租户站点与控制台共用，且同路径只能注册一次
+  await app.register(imageRoutes)
 
   // 可视化面板与管理控制台
   await app.register(dashboardRoutes)
