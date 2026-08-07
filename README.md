@@ -9,13 +9,19 @@ SEO 全生命周期管理平台。平台托管内容并执行 SEO 规则检测�
 
 ```text
 第三方 POST 内容
-  → 平台跑 24 条 SEO 规则
-  → 返回不合格项（规则编码 + 证据 + 修复建议）
+  → 平台跑 29 条 SEO 规则
+  → 返回不合格项（规则编码 + 证据 + 修复建议 + 预估耗时 + 可挽回分数）
   → 第三方自行优化后 PUT 更新
   → 重新检测（可多轮迭代）
   → 达标 → publish（存在 critical 问题时返回 422 拒绝）
-  → sitemap 自动包含 + IndexNow 提交
+  → 按 Host 渲染上线 + sitemap 自动包含
+  → 自动通知搜索引擎（IndexNow / Search Console 提交 sitemap）
+  → 每日回读 Search Console：点击、曝光、排名
+  → 面板显示效果，发现新问题继续优化
 ```
+
+修订已发布的内容后可以再次发布——修复版本必须能替换线上旧版本，
+否则「检测→修复→发布」会断在最后一步。
 
 ## 三种部署方式
 
@@ -50,7 +56,7 @@ API Token 在 [Cloudflare 控制台](https://dash.cloudflare.com/profile/api-tok
 
 ```bash
 # 1. 在 content/ 下新增 Markdown
-# 2. 提交 PR → 自动跑 24 条 SEO 检测，不合格无法合并
+# 2. 提交 PR → 自动跑 29 条 SEO 检测，不合格无法合并
 # 3. 合并 → 自动构建、部署 Pages、提交搜索引擎
 ```
 
@@ -87,16 +93,21 @@ docker compose exec api node /app/seed.mjs   # 输出 API Key，只显示一次
 
 两个界面均由 API 进程直接提供（单容器、单域名，无需额外构建）：
 
-**`/console` 管理控制台**（Alpine.js + Pico CSS，本地内置无 CDN）
+**`/console` 管理控制台**（Alpine.js + 自写样式，本地内置无 CDN）
 
-- 总览：健康分、内容数、可发布/被拦截统计、常见问题排行
-- 站点：添加、查看、软删除
-- 内容：提交（HTML/Markdown）、查看检测详情、一键发布
-- API Key：创建、查看、吊销
+管理员用邮箱密码登录；租户无需登录，凭签发的 API Key 直接调接口。
+
+- 总览：健康分环形图、分数分布、发布漏斗（内容→通过检测→已发布→已提交搜索引擎）、
+  「下一步该修什么」按性价比排序（影响面 + 耗时 + 每页可挽回分数）
+- 发布之后：跨站点的点击、曝光、点击率、平均排名（近 28 天，含环比）
+- 内容：提交（HTML/Markdown）、**预览渲染效果**、打开线上页、检测详情、版本历史、发布
+- 站点：添加、自有域名绑定与验证
+- 搜索表现：按站点的关键词榜、趋势、发布事件标注
+- 密钥与租户：创建、查看、吊销
 
 **`/` 可视化面板**（只读大屏）
 
-- 平均健康分、30 天趋势折线、问题级别分布
+- 平均健康分、趋势折线、问题级别分布
 
 数据全部来自 `/api/v1` 真实接口，无任何演示数据。
 
@@ -105,7 +116,7 @@ docker compose exec api node /app/seed.mjs   # 输出 API Key，只显示一次
 已实现：
 
 - 内容托管 CRUD，支持 HTML 与 Markdown 两种格式
-- **24 条 SEO 规则**，分 critical / warning / notice 三级
+- **29 条 SEO 规则**，分 critical / warning / notice 三级
 - 可解释健康分（按规则权重扣分，可追溯每一分的来源）
 - 发布门槛：critical 问题阻断发布
 - 无状态预检接口（不落库，供发布前反复试算）
@@ -114,7 +125,12 @@ docker compose exec api node /app/seed.mjs   # 输出 API Key，只显示一次
 - 静态站生成器（GitHub Pages / Cloudflare Pages 免费部署）
 - 配置驱动的站点自定义（导航、首页、配色，零代码）
 - IndexNow 提交与**后台实际投递**（含幂等、跨站 URL 拦截、可重试/不可重试区分）
+- **Search Console 搜索表现同步**：每日自动回读点击 / 曝光 / 排名，
+  发布事件标注在流量曲线上（平台独占发布时间戳，外部工具做不到）
+- **Webhook 投递**：HMAC 签名、指数退避重试、4xx 不重试 5xx 重试、SSRF 防护
+- 发布即自动通知搜索引擎（无需客户再调一次提交接口）
 - API Key 认证与 scope 授权、多租户隔离
+- 首次启动自动创建平台管理员（幂等，已存在时不覆盖）
 - 管理控制台 + 可视化面板
 - 站点与 API Key 管理接口
 - OpenAPI 3.1 文档
@@ -128,22 +144,58 @@ docker compose exec api node /app/seed.mjs   # 输出 API Key，只显示一次
 
 尚未实现（二期）：
 
-- 外部站点抓取与 SSRF 防护
+- 外部站点抓取（抓取他人站点做审计；当前只检测平台托管的内容）
 - 网站所有权验证（针对用户自有站点；平台托管站点已支持 Google 自动验证）
-- Search Console 搜索表现数据同步（点击 / 曝光 / 排名，当前只做提交）
-- Webhook 实际投递（签名与重试逻辑已实现并有测试，缺投递器）
+- 关键词研究与竞品分析
 
 详见 [docs/ADR-001-内容托管闭环.md](docs/ADR-001-内容托管闭环.md)。
 
 ## 关于 Google 收录
 
-必须如实说明：**没有任何工具可以强制 Google 收录**。本平台的作用是
+必须如实说明：**没有任何工具可以强制 Google 收录，更不能保证排名。**
+Google 官方文档写明「不保证抓取、索引或提供你的页面」，
+也「不接受付费提高抓取频率或排名」。
+
+本平台能做的是把技术层面的障碍降到零：
 
 1. 检测并阻止会导致不被收录的问题（noindex、缺 title、canonical 跨域、空内容等）；
-2. 自动生成 sitemap 并在 robots.txt 中声明，让 Google 更快发现；
-3. 通过 IndexNow 通知 Bing / Yandex / Seznam / Naver —— **Google 不支持该协议**。
+2. 自动生成 sitemap 并在 robots.txt 中声明；
+3. 通过 Search Console API 提交 sitemap —— Google 侧唯一的主动手段；
+4. 通过 IndexNow 通知 Bing / Yandex / Seznam / Naver —— **Google 不支持该协议**；
+5. 发布后每日回读真实搜索表现，让优化效果可被验证。
 
-Google 侧的收录仍取决于其自身抓取策略与内容质量。
+收录与排名仍取决于 Google 的抓取策略、内容质量、站点年龄与竞争程度。
+新域名通常需要数周到数月才会获得正常的收录速度，这段时间做什么都无法加速。
+
+## Python SDK
+
+零依赖（只用标准库），把「发布被拦截」做成可直接读取的异常：
+
+```bash
+pip install rankloop
+```
+
+```python
+from rankloop import Client, PublishBlockedError
+
+client = Client(api_key="rkl_live_xxx")
+content = client.submit(site_id, path="/posts/hello", body=html)
+
+try:
+    client.publish(content.id)
+except PublishBlockedError as e:
+    print(f"当前 {e.score} 分，必须先修：{e.blocking}")
+```
+
+批量场景不想写 try/except：
+
+```python
+ok, todo = client.publish_when_ready(content.id)
+for r in todo:
+    print(r.message, r.recommendation, f"约 {r.minutes} 分钟")
+```
+
+详见 [sdk/python/README.md](sdk/python/README.md)。
 
 ## API
 
@@ -151,7 +203,7 @@ Google 侧的收录仍取决于其自身抓取策略与内容质量。
 
 | 方法 | 路径 | scope | 说明 |
 | --- | --- | --- | --- |
-| GET | `/rules` | 公开 | 24 条规则清单与权重 |
+| GET | `/rules` | 公开 | 29 条规则清单与权重 |
 | GET | `/openapi.json` | 公开 | OpenAPI 3.1 文档 |
 | POST | `/sites/:siteId/contents` | `contents:write` | 提交内容并检测 |
 | GET | `/sites/:siteId/contents` | `contents:read` | 列出站点内容 |
@@ -159,8 +211,15 @@ Google 侧的收录仍取决于其自身抓取策略与内容质量。
 | PUT | `/contents/:contentId` | `contents:write` | 更新内容，产生新版本 |
 | POST | `/contents/check` | `contents:write` | 无状态预检，不落库 |
 | POST | `/contents/:contentId/publish` | `contents:publish` | 发布，critical 时 422 |
+| GET | `/contents/:contentId/recommendations` | `contents:read` | 按性价比排序的修复建议 |
 | GET | `/stats/overview` | `contents:read` | 面板总览统计 |
-| GET | `/stats/trend` | `contents:read` | 30 天健康分趋势 |
+| GET | `/stats/trend` | `contents:read` | 健康分趋势 |
+| GET | `/stats/search` | `analytics:read` | 跨站点搜索表现汇总 |
+| GET | `/sites/:siteId/search-performance` | `analytics:read` | 站点点击 / 曝光 / 排名 |
+| GET | `/sites/:siteId/keywords` | `analytics:read` | 关键词榜 |
+| GET | `/sites/:siteId/search-trend` | `analytics:read` | 每日趋势 + 发布事件标注 |
+| POST | `/webhooks` | `sites:write` | 登记回调地址 |
+| GET | `/webhooks/:id/deliveries` | `sites:read` | 投递记录（排查未收到通知） |
 | GET | `/sites/:siteId/sitemap.xml` | `indexing:read` | 已发布内容的 sitemap |
 | GET | `/sites/:siteId/robots.txt` | `indexing:read` | robots.txt |
 | POST | `/sites/:siteId/indexnow/key` | `indexing:write` | 配置 IndexNow Key |
