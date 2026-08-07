@@ -52,7 +52,13 @@ export async function analyticsRoutes(
     async (req, reply) => {
       const { workspaceId } = req.auth!
       const site = await prisma.site.findFirst({
-        where: { id: requireSiteId(req.params.siteId), workspaceId, archivedAt: null },
+        where: {
+          id: requireSiteId(req.params.siteId),
+          // 平台管理员可查看任意租户的站点，与 /sites 等接口口径一致；
+          // 否则管理员在面板上选了租户站点却只能拿到 404
+          ...(req.user?.isPlatformAdmin ? {} : { workspaceId }),
+          archivedAt: null,
+        },
       })
       if (!site) throw new ApiError(404, 'NOT_FOUND', '站点不存在', {})
 
@@ -125,7 +131,13 @@ export async function analyticsRoutes(
     async (req, reply) => {
       const { workspaceId } = req.auth!
       const site = await prisma.site.findFirst({
-        where: { id: requireSiteId(req.params.siteId), workspaceId, archivedAt: null },
+        where: {
+          id: requireSiteId(req.params.siteId),
+          // 平台管理员可查看任意租户的站点，与 /sites 等接口口径一致；
+          // 否则管理员在面板上选了租户站点却只能拿到 404
+          ...(req.user?.isPlatformAdmin ? {} : { workspaceId }),
+          archivedAt: null,
+        },
       })
       if (!site) throw new ApiError(404, 'NOT_FOUND', '站点不存在', {})
 
@@ -154,7 +166,13 @@ export async function analyticsRoutes(
     async (req, reply) => {
       const { workspaceId } = req.auth!
       const site = await prisma.site.findFirst({
-        where: { id: requireSiteId(req.params.siteId), workspaceId, archivedAt: null },
+        where: {
+          id: requireSiteId(req.params.siteId),
+          // 平台管理员可查看任意租户的站点，与 /sites 等接口口径一致；
+          // 否则管理员在面板上选了租户站点却只能拿到 404
+          ...(req.user?.isPlatformAdmin ? {} : { workspaceId }),
+          archivedAt: null,
+        },
       })
       if (!site) throw new ApiError(404, 'NOT_FOUND', '站点不存在', {})
 
@@ -234,7 +252,13 @@ export async function analyticsRoutes(
     async (req, reply) => {
       const { workspaceId } = req.auth!
       const site = await prisma.site.findFirst({
-        where: { id: requireSiteId(req.params.siteId), workspaceId, archivedAt: null },
+        where: {
+          id: requireSiteId(req.params.siteId),
+          // 平台管理员可查看任意租户的站点，与 /sites 等接口口径一致；
+          // 否则管理员在面板上选了租户站点却只能拿到 404
+          ...(req.user?.isPlatformAdmin ? {} : { workspaceId }),
+          archivedAt: null,
+        },
       })
       if (!site) throw new ApiError(404, 'NOT_FOUND', '站点不存在', {})
 
