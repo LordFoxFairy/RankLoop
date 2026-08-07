@@ -85,8 +85,9 @@ const FAQS = [
 
 export function renderLanding(data: LandingData): string {
   const featureCards = FEATURES.map(
-    (f) => `<article class="card">
-  <div class="ico">${f.icon}</div>
+    (f, i) => `<article class="card">
+  <img class="ico-img" src="/img/feature-${i + 1}.png" width="800" height="500"
+    loading="lazy" alt="${escapeHtml(f.title)}功能示意图">
   <h3>${escapeHtml(f.title)}</h3>
   <p>${escapeHtml(f.body)}</p>
 </article>`,
@@ -106,17 +107,17 @@ export function renderLanding(data: LandingData): string {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<title>RankLoop — 内容发布前的 SEO 门槛</title>
-<meta name="description" content="RankLoop 在内容发布前执行 ${data.ruleCount} 条 SEO 规则检测，不合格的内容无法发布。托管内容并按域名渲染，自动生成 sitemap 并提交搜索引擎。">
+<title>RankLoop — 把内容质量变成搜索增长</title>
+<meta name="description" content="检测、优化、发布、收录闭环管理。${data.ruleCount} 条规则在发布前拦截 SEO 缺陷，达标内容自动进入 sitemap 并提交搜索引擎，发布后回读搜索表现数据。">
 <link rel="canonical" href="${escapeHtml(data.siteUrl)}/">
 <meta property="og:type" content="website">
-<meta property="og:title" content="RankLoop — 内容发布前的 SEO 门槛">
-<meta property="og:description" content="${data.ruleCount} 条规则自动检测，不合格的内容发不出去。">
-<meta property="og:image" content="${escapeHtml(data.siteUrl)}/img/og-cover.svg">
+<meta property="og:title" content="RankLoop — 把内容质量变成搜索增长">
+<meta property="og:description" content="检测、优化、发布、收录——每一步都沉淀为下一次增长。">
+<meta property="og:image" content="${escapeHtml(data.siteUrl)}/img/og-cover.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:image" content="${escapeHtml(data.siteUrl)}/img/og-cover.svg">
+<meta name="twitter:image" content="${escapeHtml(data.siteUrl)}/img/og-cover.png">
 <style>
 :root{
   color-scheme:light dark;
@@ -181,6 +182,13 @@ section{padding:72px 0}
 .card:hover{border-color:color-mix(in srgb,var(--accent) 40%,var(--line));
  transform:translateY(-2px)}
 .card .ico{font-size:22px;margin-bottom:13px;line-height:1}
+.card .ico-img{width:100%;height:auto;border-radius:9px;margin-bottom:14px;
+ display:block;background:var(--surface)}
+.shot{margin:52px 0 0;padding:0}
+.shot img{width:100%;height:auto;border-radius:14px;display:block;
+ border:1px solid var(--line);box-shadow:0 18px 48px -22px rgba(0,0,0,.42)}
+.flow-img img{border:0;box-shadow:none;background:transparent}
+.hl{color:var(--accent)}
 .card h3{margin:0 0 9px;font-size:16.5px;font-weight:640}
 .card p{margin:0;color:var(--muted);font-size:14.8px;line-height:1.65}
 
@@ -265,16 +273,21 @@ footer a:hover{color:var(--fg)}
 <div class="wrap">
   <div class="hero">
     <div class="badge"><b>${data.ruleCount}</b> 条检测规则 · <b>${data.criticalCount}</b> 条可阻断发布</div>
-    <h1>不合格的内容，<br>发不出去。</h1>
+    <h1>把内容质量，<br>变成<span class="hl">搜索增长</span>。</h1>
     <p class="sub">
-      SEO 问题通常在发布之后才被发现——等到流量下滑时，损失已经造成。
-      RankLoop 把检测提前到发布之前：规则不通过，内容就进不了线上。
+      检测、优化、发布、收录——每一步都沉淀为下一次增长。
+      不达标的内容进不了线上，达标的自动进入 sitemap 并推送搜索引擎。
     </p>
     <div class="cta">
       <a class="btn primary" href="/console">开始使用</a>
       <a class="btn" href="#flow">了解工作方式</a>
     </div>
   </div>
+
+  <figure class="shot">
+    <img src="/img/hero-product.png" width="1600" height="1000" loading="eager"
+      alt="RankLoop 增长工作台界面：内容健康度评分、优化建议列表与发布后的搜索可见度趋势">
+  </figure>
 
   <div class="stats">
     <div class="stat"><b>${data.ruleCount}</b><span>检测规则</span></div>
@@ -286,10 +299,21 @@ footer a:hover{color:var(--fg)}
 
 <section id="features"><div class="wrap">
   <div class="sec-head">
-    <h2>把 SEO 变成发布门槛</h2>
-    <p>不是发布后再来体检，而是不达标就发不出去。</p>
+    <h2>每一次发布，都往前走一步</h2>
+    <p>问题在上线前就被拦住，达标的内容自动进入收录流程。</p>
   </div>
   <div class="grid">${featureCards}</div>
+</div></section>
+
+<section><div class="wrap">
+  <div class="sec-head">
+    <h2>发布之后，看得见效果</h2>
+    <p>回读 Search Console 数据：哪些词带来点击、排名多少、趋势如何。</p>
+  </div>
+  <figure class="shot">
+    <img src="/img/dashboard-preview.png" width="1600" height="1000" loading="lazy"
+      alt="搜索表现面板：点击与曝光趋势、关键词排行、平均排名变化">
+  </figure>
 </div></section>
 
 <section id="flow" class="flow"><div class="wrap">
@@ -298,6 +322,11 @@ footer a:hover{color:var(--fg)}
     <p>第三方自行优化，平台只负责判定——不生成内容，不介入 AI。</p>
   </div>
   <ol class="steps">${steps}</ol>
+
+  <figure class="shot flow-img">
+    <img src="/img/flow-diagram.png" width="1400" height="500" loading="lazy"
+      alt="五步闭环示意图：提交内容、规则检测、迭代修复、达标发布、提交搜索引擎收录">
+  </figure>
 
   <div style="margin-top:46px" class="demo">
     <div class="demo-bar">
@@ -336,8 +365,8 @@ footer a:hover{color:var(--fg)}
 </div></section>
 
 <div class="wrap"><div class="final">
-  <h2>让不合格的内容发不出去</h2>
-  <p>把第一篇内容推进来，看看它能拿多少分。</p>
+  <h2>从第一篇内容开始</h2>
+  <p>推一篇进来，看看它的健康分与优化空间。</p>
   <div class="cta">
     <a class="btn primary" href="/console">进入控制台</a>
     <a class="btn" href="#features">了解功能</a>
@@ -345,7 +374,7 @@ footer a:hover{color:var(--fg)}
 </div></div>
 
 <footer><div class="wrap">
-  <span>RankLoop SEO · 内容发布前的 SEO 门槛</span>
+  <span>RankLoop · 把内容质量变成搜索增长</span>
   <span>
     <a href="/console">控制台</a>
     <a href="/docs">开发者文档</a>

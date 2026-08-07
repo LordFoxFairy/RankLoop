@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@prisma/client'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
+import { listAudit } from '../../infrastructure/audit'
 import { dailyTotals, syncSite, topKeywords } from '../../infrastructure/gsc-sync'
 import { requireScope } from '../../lib/auth'
 import { ApiError } from '../../shared/errors'
@@ -144,6 +145,34 @@ export async function analyticsRoutes(
 
       const rows = await dailyTotals(prisma, site.id, Math.min(Number(req.query.days) || 28, 90))
       return reply.send({ data: rows, meta: { request_id: req.id, count: rows.length } })
+    },
+  )
+
+  /** 审计日志：谁在什么时候改了什么（规格 §8.2） */
+  app.get<{ Querystring: { limit?: string; action?: string } }>(
+    '/audit',
+    { preHandler: requireScope('sites:read') },
+    async (req, reply) => {
+      const { workspaceId } = req.auth!
+      const rows = await listAudit(prisma, {
+        workspaceId,
+        limit: Number(req.query.limit) || 100,
+        action: req.query.action,
+      })
+
+      return reply.send({
+        data: rows.map((r) => ({
+          id: r.id,
+          action: r.action,
+          resource: r.resource,
+          resource_id: r.resourceId,
+          actor: r.user?.email ?? 'API Key',
+          metadata: r.metadata,
+          ip: r.ip,
+          at: r.createdAt,
+        })),
+        meta: { request_id: req.id, count: rows.length },
+      })
     },
   )
 

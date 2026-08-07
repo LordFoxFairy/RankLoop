@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { extname, join } from 'node:path'
 import type { FastifyInstance } from 'fastify'
 
 /**
@@ -222,6 +222,97 @@ textarea{font-family:ui-monospace,monospace;font-size:12px;min-height:220px}
         </div>
       </template>
 
+      <!-- 搜索表现 -->
+      <template x-if="tab==='search'">
+        <div>
+          <div class="inline">
+            <select x-model="form.siteId" @change="loadSearch()">
+              <option value="">选择站点…</option>
+              <template x-for="s in sites" :key="s.id">
+                <option :value="s.id" x-text="s.name"></option>
+              </template>
+            </select>
+            <select x-model="searchDays" @change="loadSearch()">
+              <option value="7">近 7 天</option>
+              <option value="28">近 28 天</option>
+              <option value="90">近 90 天</option>
+            </select>
+            <button @click="syncSearch()" :disabled="!form.siteId || syncing"
+                    x-text="syncing ? '同步中…' : '从 Search Console 同步'"></button>
+          </div>
+
+          <template x-if="!form.siteId"><div class="empty">请先选择站点</div></template>
+
+          <template x-if="form.siteId && perf">
+            <div>
+              <div class="cards">
+                <article><h4>点击</h4>
+                  <div class="big" x-text="perf.clicks"></div>
+                  <div class="muted" x-show="perf.change?.clicks_pct !== null"
+                       :style="'color:'+(perf.change?.clicks>=0?'#067647':'#b42318')"
+                       x-text="(perf.change?.clicks>=0?'▲ +':'▼ ')+perf.change?.clicks+' ('+perf.change?.clicks_pct+'%)'"></div>
+                </article>
+                <article><h4>曝光</h4><div class="big" x-text="perf.impressions"></div></article>
+                <article><h4>点击率</h4>
+                  <div class="big" x-text="(perf.ctr*100).toFixed(2)+'%'"></div></article>
+                <article><h4>平均排名</h4>
+                  <div class="big" :style="'color:'+posColor(perf.position)"
+                       x-text="perf.position || '—'"></div></article>
+              </div>
+
+              <template x-if="perf.note">
+                <article style="margin-bottom:14px">
+                  <p class="muted" style="margin:0" x-text="perf.note"></p>
+                  <p class="muted" style="margin:6px 0 0;font-size:11px"
+                     x-show="perf.last_sync"
+                     x-text="'最近同步：'+(perf.last_sync?.status)+' · '+(perf.last_sync?.rows)+' 行'"></p>
+                </article>
+              </template>
+
+              <article style="margin-bottom:14px"><h4>趋势</h4>
+                <template x-if="!trend.length"><div class="empty">暂无数据</div></template>
+                <div x-show="trend.length" x-html="trendChart()"></div>
+              </article>
+
+              <article><h4>关键词排行</h4>
+                <template x-if="!keywords.length"><div class="empty">暂无关键词数据</div></template>
+                <template x-if="keywords.length">
+                  <table><thead><tr><th>关键词</th><th class="right">点击</th>
+                    <th class="right">曝光</th><th class="right">CTR</th>
+                    <th class="right">排名</th></tr></thead>
+                  <tbody><template x-for="k in keywords" :key="k.query">
+                    <tr><td x-text="k.query"></td>
+                        <td class="right" x-text="k.clicks"></td>
+                        <td class="right" x-text="k.impressions"></td>
+                        <td class="right" x-text="(k.ctr*100).toFixed(1)+'%'"></td>
+                        <td class="right" :style="'color:'+posColor(k.position)"
+                            x-text="k.position"></td></tr>
+                  </template></tbody></table>
+                </template>
+              </article>
+            </div>
+          </template>
+        </div>
+      </template>
+
+      <!-- 审计日志 -->
+      <template x-if="tab==='audit'">
+        <article>
+          <h4>操作记录</h4>
+          <template x-if="!auditRows.length"><div class="empty">暂无记录</div></template>
+          <template x-if="auditRows.length">
+            <table><thead><tr><th>时间</th><th>操作</th><th>对象</th>
+              <th>执行者</th></tr></thead>
+            <tbody><template x-for="a in auditRows" :key="a.id">
+              <tr><td class="muted" x-text="new Date(a.at).toLocaleString('zh-CN')"></td>
+                  <td><code x-text="a.action"></code></td>
+                  <td class="muted" x-text="(a.metadata?.path) || a.resource_id || a.resource"></td>
+                  <td class="muted" x-text="a.actor"></td></tr>
+            </template></tbody></table>
+          </template>
+        </article>
+      </template>
+
       <!-- 租户（仅管理员） -->
       <template x-if="tab==='tenants'">
         <div>
@@ -395,6 +486,7 @@ textarea{font-family:ui-monospace,monospace;font-size:12px;min-height:220px}
 function app() {
   return {
     me: null, error: '', notice: '', rulesCount: 0, tenants: [],
+    perf: null, keywords: [], trend: [], searchDays: '28', syncing: false, auditRows: [],
     tab: 'overview', tabs: [
       { id: 'overview', label: '总览' }, { id: 'sites', label: '站点' },
       { id: 'contents', label: '内容' }, { id: 'keys', label: 'API Key' },
@@ -464,7 +556,11 @@ function app() {
       } catch (e) { this.error = e.message }
     },
 
-    go(t) { this.tab = t; this.error = '' },
+    go(t) {
+      this.tab = t; this.error = ''
+      if (t === 'search' && this.form.siteId) this.loadSearch()
+      if (t === 'audit') this.loadAudit()
+    },
 
     async createSite() {
       this.error = ''
@@ -575,6 +671,68 @@ function app() {
       } catch (e) { this.error = e.message }
     },
 
+    // 排名越小越好：1-10 在首页，10-30 第二三页，之后基本无流量
+    posColor(p) {
+      if (!p) return 'var(--pico-muted-color)'
+      return p <= 10 ? '#067647' : p <= 30 ? '#b54708' : '#b42318'
+    },
+
+    async loadAudit() {
+      this.error = ''
+      try { this.auditRows = await this.api('/audit?limit=100') }
+      catch (e) { this.error = e.message }
+    },
+
+    async loadSearch() {
+      if (!this.form.siteId) { this.perf = null; return }
+      this.error = ''
+      const q = '?days=' + this.searchDays
+      try {
+        const [p, k, t] = await Promise.all([
+          this.api('/sites/' + this.form.siteId + '/search-performance' + q),
+          this.api('/sites/' + this.form.siteId + '/keywords' + q),
+          this.api('/sites/' + this.form.siteId + '/search-trend' + q),
+        ])
+        this.perf = p; this.keywords = k; this.trend = t
+      } catch (e) { this.error = e.message }
+    },
+
+    async syncSearch() {
+      this.error = ''; this.syncing = true
+      try {
+        const r = await this.api('/sites/' + this.form.siteId + '/search-performance/sync', {
+          method: 'POST', body: JSON.stringify({ days: Number(this.searchDays) }),
+        })
+        this.flash('已同步 ' + r.rows_synced + ' 行（' + r.start_date + ' ~ ' + r.end_date + '）')
+        await this.loadSearch()
+      } catch (e) { this.error = e.message }
+      finally { this.syncing = false }
+    },
+
+    // 内联 SVG 折线，避免引入图表库
+    trendChart() {
+      const d = this.trend
+      if (d.length < 2) return '<div class="empty">数据不足两天，无法绘制趋势</div>'
+      const w = 640, h = 160, pad = 28
+      const max = Math.max(1, ...d.map(x => x.clicks))
+      const xs = i => pad + i * (w - pad * 2) / (d.length - 1)
+      const ys = v => h - pad - (v / max) * (h - pad * 2)
+      const line = d.map((x, i) => (i ? 'L' : 'M') + xs(i).toFixed(1) + ' ' + ys(x.clicks).toFixed(1)).join(' ')
+      const area = line + ' L' + xs(d.length - 1).toFixed(1) + ' ' + (h - pad) + ' L' + pad + ' ' + (h - pad) + ' Z'
+      const dots = d.map((x, i) =>
+        '<circle cx="' + xs(i).toFixed(1) + '" cy="' + ys(x.clicks).toFixed(1) +
+        '" r="2.5" fill="var(--pico-primary)"><title>' + x.date + '：' + x.clicks +
+        ' 次点击 · ' + x.impressions + ' 次曝光</title></circle>').join('')
+      return '<svg viewBox="0 0 ' + w + ' ' + h + '" style="width:100%;height:160px" ' +
+        'role="img" aria-label="点击趋势折线图">' +
+        '<line x1="' + pad + '" y1="' + (h - pad) + '" x2="' + (w - pad) + '" y2="' + (h - pad) +
+        '" stroke="var(--pico-muted-border-color)"/>' +
+        '<text x="4" y="' + (pad + 4) + '" fill="var(--pico-muted-color)" font-size="10">' + max + '</text>' +
+        '<path d="' + area + '" fill="var(--pico-primary)" opacity=".1"/>' +
+        '<path d="' + line + '" fill="none" stroke="var(--pico-primary)" stroke-width="2"/>' +
+        dots + '</svg>'
+    },
+
     async createTenant() {
       this.error = ''; this.newKey = ''
       try {
@@ -633,19 +791,27 @@ export async function consoleRoutes(app: FastifyInstance): Promise<void> {
       reply.type(type).header('cache-control', 'public, max-age=31536000, immutable').send(content)
   }
 
-  // 品牌图片。占位版本为 SVG，替换为 PNG 时同名覆盖即可。
-  for (const [file, type] of [
-    ['og-cover.svg', 'image/svg+xml'],
-    ['logo.svg', 'image/svg+xml'],
-  ] as const) {
-    const full = join(assetDir, 'img', file)
-    if (existsSync(full)) {
-      const content = readFileSync(full, 'utf8')
+  // 品牌图片：启动时读入内存并注册路由。
+  // 遍历目录而非逐个列出，新增图片无需改代码。
+  const imgDir = join(assetDir, 'img')
+  if (existsSync(imgDir)) {
+    const TYPES: Record<string, string> = {
+      '.png': 'image/png',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.svg': 'image/svg+xml',
+      '.webp': 'image/webp',
+    }
+    for (const file of readdirSync(imgDir)) {
+      const type = TYPES[extname(file).toLowerCase()]
+      if (!type) continue
+      // 二进制读取：PNG 按 utf8 读会损坏
+      const buf = readFileSync(join(imgDir, file))
       app.get(`/img/${file}`, async (_req, reply) =>
         reply
           .type(type)
-          .header('cache-control', 'public, max-age=86400')
-          .send(content),
+          .header('cache-control', 'public, max-age=31536000, immutable')
+          .send(buf),
       )
     }
   }

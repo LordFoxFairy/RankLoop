@@ -2,6 +2,7 @@ import type { Content } from '../../domain/content'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import type { ContentService } from '../../application/content-service'
+import { audit } from '../../infrastructure/audit'
 import { requireScope } from '../../lib/auth'
 import { badRequest } from '../error-mapper'
 
@@ -60,6 +61,7 @@ export async function contentRoutes(
   app: FastifyInstance,
   service: ContentService,
   siteOrigin: (siteId: string, workspaceId: string) => Promise<string>,
+  prisma?: import('@prisma/client').PrismaClient,
 ): Promise<void> {
   app.post<{ Params: { siteId: string } }>(
     '/sites/:siteId/contents',
@@ -76,6 +78,14 @@ export async function contentRoutes(
       })
 
       const origin = await siteOrigin(req.params.siteId, auth.workspaceId)
+      if (prisma) {
+        audit(prisma, req, {
+          action: 'content.created',
+          resource: 'content',
+          resourceId: content.id,
+          metadata: { path: content.path.value, score: content.currentVersion?.check.score },
+        })
+      }
       return reply.code(201).send({
         data: serializeContent(content, `${origin}${content.path.value}`),
         meta: { request_id: req.id },
@@ -173,6 +183,14 @@ export async function contentRoutes(
       const auth = req.auth!
       const content = await service.publish(req.params.contentId, auth.workspaceId)
       const origin = await siteOrigin(content.siteId, auth.workspaceId)
+      if (prisma) {
+        audit(prisma, req, {
+          action: 'content.published',
+          resource: 'content',
+          resourceId: content.id,
+          metadata: { path: content.path.value },
+        })
+      }
       return reply.send({
         data: serializeContent(content, `${origin}${content.path.value}`),
         meta: { request_id: req.id },

@@ -160,7 +160,7 @@ export async function buildServer(env: Env, prisma: PrismaClient): Promise<Fasti
   await app.register(
     async (scoped) => {
       scoped.addHook('preHandler', createAuthMiddleware(prisma))
-      await contentRoutes(scoped, service, siteOrigin)
+      await contentRoutes(scoped, service, siteOrigin, prisma)
       await statsRoutes(scoped, prisma)
       await indexingRoutes(scoped, prisma)
       await siteRoutes(scoped, prisma)
