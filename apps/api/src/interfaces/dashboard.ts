@@ -206,7 +206,7 @@ if (saved) { $('key').value = saved; load() }
 </html>`
 
 export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
-  app.get('/', async (_req, reply) => {
+  app.get('/overview', async (_req, reply) => {
     return reply.type('text/html; charset=utf-8').send(PAGE)
   })
 

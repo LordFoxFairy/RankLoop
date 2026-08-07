@@ -54,6 +54,8 @@ COPY --chown=node:node apps/api/public apps/api/public
 COPY --chown=node:node apps/api/package.json apps/api/
 COPY --chown=node:node packages/seo-rules/package.json packages/seo-rules/
 COPY --chown=node:node packages/db/prisma packages/db/prisma
+# 初始化脚本随镜像发布，避免每次部署都要手动 cp 进容器
+COPY --chown=node:node packages/db/seed.mjs packages/db/seed.mjs
 COPY --chown=node:node package.json ./
 
 USER node

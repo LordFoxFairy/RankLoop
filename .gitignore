@@ -40,3 +40,7 @@ Thumbs.db
 
 # 静态站构建产物
 /dist-site
+
+# 截图产物
+*.png
+!docs/images/*.png

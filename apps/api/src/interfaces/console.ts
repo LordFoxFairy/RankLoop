@@ -80,26 +80,43 @@ textarea{font-family:ui-monospace,monospace;font-size:12px;min-height:220px}
 <body x-data="app()" x-init="boot()">
 
 <div class="topbar">
-  <strong>RankLoop</strong>
+  <a href="/" style="text-decoration:none;color:inherit"><strong>RankLoop</strong></a>
   <span class="muted" x-text="rulesCount ? rulesCount + ' 条规则' : ''"></span>
   <span style="flex:1"></span>
-  <input type="password" placeholder="API Key (rkl_live_…)" x-model="key"
-         @keydown.enter="connect()" autocomplete="off">
-  <button @click="connect()" x-text="connected ? '刷新' : '连接'"></button>
+  <template x-if="me">
+    <span class="muted" x-text="me.email"></span>
+  </template>
+  <template x-if="me">
+    <button @click="refresh()" class="secondary">刷新</button>
+  </template>
+  <template x-if="me">
+    <button @click="logout()" class="secondary">退出</button>
+  </template>
 </div>
 
 <main>
   <template x-if="error"><div class="err" x-text="error"></div></template>
   <template x-if="notice"><div class="ok-msg" x-text="notice"></div></template>
 
-  <template x-if="!connected">
-    <article><h4>开始使用</h4>
-      <p class="muted">输入 API Key 连接。首次使用可在服务器执行：</p>
-      <pre><code>docker compose exec api node /app/seed.mjs</code></pre>
+  <template x-if="!me">
+    <article style="max-width:400px;margin:40px auto">
+      <h4>管理员登录</h4>
+      <label>邮箱
+        <input type="email" x-model="form.email" @keydown.enter="submitAuth()"
+               placeholder="you@example.com" autocomplete="email">
+      </label>
+      <label>密码
+        <input type="password" x-model="form.password" @keydown.enter="submitAuth()"
+               placeholder="密码" autocomplete="current-password">
+      </label>
+      <button @click="submitAuth()">登录</button>
+      <p class="muted" style="text-align:center;margin:12px 0 0;font-size:12px">
+        客户无需登录——由管理员分配 API Key 后直接调用接口
+      </p>
     </article>
   </template>
 
-  <template x-if="connected">
+  <template x-if="me">
     <div>
       <nav class="tabs">
         <template x-for="t in tabs" :key="t.id">
@@ -149,15 +166,21 @@ textarea{font-family:ui-monospace,monospace;font-size:12px;min-height:220px}
           <article>
             <template x-if="!sites.length"><div class="empty">还没有站点</div></template>
             <template x-if="sites.length">
-              <table><thead><tr><th>名称</th><th>Origin</th><th class="right">内容数</th>
-                <th>IndexNow</th><th></th></tr></thead>
+              <table><thead><tr><th>名称</th><th>访问地址</th><th>自有域名</th>
+                <th class="right">内容</th><th></th></tr></thead>
               <tbody><template x-for="s in sites" :key="s.id">
                 <tr><td x-text="s.name"></td>
-                    <td><code x-text="s.origin"></code></td>
+                    <td><a :href="s.live_url" target="_blank" rel="noopener"><code x-text="s.live_url"></code></a></td>
+                    <td><template x-if="s.domain">
+                          <span class="pill" :class="s.domain_verified?'p-ok':'p-warning'"
+                            x-text="s.domain + (s.domain_verified?'':'（待验证）')"></span>
+                        </template>
+                        <template x-if="!s.domain"><span class="muted">未绑定</span></template></td>
                     <td class="right" x-text="s.content_count"></td>
-                    <td><span class="pill" :class="s.indexnow_configured?'p-ok':'p-draft'"
-                          x-text="s.indexnow_configured?'已配置':'未配置'"></span></td>
-                    <td class="right"><button @click="pickSite(s)" style="width:auto;padding:4px 10px;font-size:12px">查看内容</button></td></tr>
+                    <td class="right">
+                      <button @click="pickSite(s)" style="width:auto;padding:4px 10px;font-size:12px">内容</button>
+                      <button @click="openDomain(s)" style="width:auto;padding:4px 10px;font-size:12px" class="secondary">域名</button>
+                    </td></tr>
               </template></tbody></table>
             </template>
           </article>
@@ -189,12 +212,52 @@ textarea{font-family:ui-monospace,monospace;font-size:12px;min-height:220px}
                     <td class="right" :style="'color:'+scoreColor(c.score)" x-text="c.score ?? '—'"></td>
                     <td class="right">
                       <button @click="inspect(c.id)" style="width:auto;padding:4px 10px;font-size:12px">详情</button>
+                      <button @click="loadVersions(c.id)" style="width:auto;padding:4px 10px;font-size:12px" class="secondary">版本</button>
                       <button @click="publish(c.id)" x-show="c.status!=='published'"
                               style="width:auto;padding:4px 10px;font-size:12px">发布</button>
                     </td></tr>
               </template></tbody></table>
             </template>
           </article>
+        </div>
+      </template>
+
+      <!-- 租户（仅管理员） -->
+      <template x-if="tab==='tenants'">
+        <div>
+          <template x-if="!me?.is_platform_admin">
+            <div class="empty">需要平台管理员权限</div>
+          </template>
+          <template x-if="me?.is_platform_admin">
+            <div>
+              <div class="inline">
+                <input placeholder="租户名称" x-model="form.tenantName">
+                <input placeholder="slug（可选）" x-model="form.tenantSlug">
+                <button @click="createTenant()">创建租户并签发 Key</button>
+              </div>
+              <template x-if="newKey">
+                <div class="ok-msg">
+                  新 API Key（仅显示一次，请转交客户）：<code x-text="newKey"></code>
+                </div>
+              </template>
+              <article>
+                <template x-if="!tenants.length"><div class="empty">还没有租户</div></template>
+                <template x-if="tenants.length">
+                  <table><thead><tr><th>租户</th><th>slug</th><th class="right">站点</th>
+                    <th class="right">内容</th><th class="right">已发布</th><th></th></tr></thead>
+                  <tbody><template x-for="t in tenants" :key="t.id">
+                    <tr><td x-text="t.name"></td>
+                        <td><code x-text="t.slug"></code></td>
+                        <td class="right" x-text="t.site_count"></td>
+                        <td class="right" x-text="t.content_count"></td>
+                        <td class="right" x-text="t.published_count"></td>
+                        <td class="right"><button @click="issueKey(t)"
+                              style="width:auto;padding:4px 10px;font-size:12px" class="secondary">补发 Key</button></td></tr>
+                  </template></tbody></table>
+                </template>
+              </article>
+            </div>
+          </template>
         </div>
       </template>
 
@@ -269,25 +332,86 @@ textarea{font-family:ui-monospace,monospace;font-size:12px;min-height:220px}
   </article>
 </dialog>
 
+<!-- 域名管理 -->
+<dialog :open="domainOpen">
+  <article>
+    <header><strong>自有域名</strong>
+      <span class="muted" x-text="domainSite?.name"></span></header>
+    <p class="muted">
+      绑定自有域名后，内容以该域名对外渲染，SEO 权重归属客户自己的域名——
+      这是平台子域名做不到的。
+    </p>
+    <label>域名
+      <input x-model="form.domain" placeholder="blog.example.com">
+    </label>
+    <template x-if="domainInfo">
+      <div class="ok-msg">
+        <strong>请配置 DNS：</strong>
+        <ol style="margin:8px 0 0;padding-left:20px">
+          <li x-text="domainInfo.instructions.step1"></li>
+          <li x-text="domainInfo.instructions.step2"></li>
+        </ol>
+      </div>
+    </template>
+    <footer>
+      <button class="secondary" @click="domainOpen=false" style="width:auto">关闭</button>
+      <button @click="unbindDomain()" class="secondary" style="width:auto"
+              x-show="domainSite?.domain">解绑</button>
+      <button @click="bindDomain()" style="width:auto">绑定</button>
+      <button @click="verifyDomain()" style="width:auto" x-show="domainSite?.domain || domainInfo">验证</button>
+    </footer>
+  </article>
+</dialog>
+
+<!-- 版本历史 -->
+<dialog :open="versionsOpen">
+  <article>
+    <header><strong>版本历史</strong>
+      <span class="muted">分数变化可追溯</span></header>
+    <template x-if="!versions.length"><div class="empty">暂无版本</div></template>
+    <template x-if="versions.length">
+      <table><thead><tr><th>版本</th><th class="right">健康分</th>
+        <th>问题</th><th>时间</th></tr></thead>
+      <tbody><template x-for="v in versions" :key="v.id">
+        <tr><td><span x-text="'v'+v.version"></span>
+                <span class="pill p-ok" x-show="v.is_current">当前</span></td>
+            <td class="right" :style="'color:'+scoreColor(v.score)" x-text="v.score ?? '—'"></td>
+            <td><template x-if="v.counts">
+                  <span>
+                    <span class="pill p-critical" x-show="v.counts.critical" x-text="v.counts.critical"></span>
+                    <span class="pill p-warning" x-show="v.counts.warning" x-text="v.counts.warning"></span>
+                    <span class="pill p-notice" x-show="v.counts.notice" x-text="v.counts.notice"></span>
+                  </span>
+                </template></td>
+            <td class="muted" x-text="new Date(v.created_at).toLocaleString('zh-CN')"></td></tr>
+      </template></tbody></table>
+    </template>
+    <footer><button @click="versionsOpen=false" style="width:auto">关闭</button></footer>
+  </article>
+</dialog>
+
 <script src="/assets/alpine.js" defer></script>
 <script>
 function app() {
   return {
-    key: '', connected: false, error: '', notice: '', rulesCount: 0,
+    me: null, error: '', notice: '', rulesCount: 0, tenants: [],
     tab: 'overview', tabs: [
       { id: 'overview', label: '总览' }, { id: 'sites', label: '站点' },
       { id: 'contents', label: '内容' }, { id: 'keys', label: 'API Key' },
     ],
     stats: {}, sites: [], contents: [], keys: [], newKey: '',
     editorOpen: false, detailOpen: false, detail: null,
-    form: { siteName: '', siteOrigin: '', siteId: '', path: '', format: 'markdown', body: '', keyName: '' },
+    domainOpen: false, domainSite: null, domainInfo: null,
+    versionsOpen: false, versions: [],
+    form: { email: '', password: '', tenantName: '', tenantSlug: '', siteName: '', siteOrigin: '',
+            siteId: '', path: '', format: 'markdown', body: '', keyName: '', domain: '' },
 
     async api(path, opts = {}) {
-      // 只在真的有 body 时才带 Content-Type：
-      // Fastify 对「声明 JSON 但 body 为空」的请求会直接 400
-      const headers = { Authorization: 'Bearer ' + this.key, ...(opts.headers || {}) }
+      // 会话走 HttpOnly Cookie；只在真的有 body 时才带 Content-Type，
+      // 因为 Fastify 对「声明 JSON 但 body 为空」的请求会直接 400
+      const headers = { ...(opts.headers || {}) }
       if (opts.body) headers['Content-Type'] = 'application/json'
-      const r = await fetch('/api/v1' + path, { ...opts, headers })
+      const r = await fetch('/api/v1' + path, { ...opts, headers, credentials: 'same-origin' })
       const body = await r.json().catch(() => ({}))
       if (!r.ok) {
         const d = body?.error?.details
@@ -306,21 +430,38 @@ function app() {
 
     async boot() {
       try { this.rulesCount = (await (await fetch('/api/v1/rules')).json()).data.length } catch {}
-      const saved = sessionStorage.getItem('rankloop_key')
-      if (saved) { this.key = saved; this.connect() }
+      // 已有会话则直接进入，无需重新登录
+      try { this.me = await this.api('/me'); await this.refresh() } catch { this.me = null }
     },
 
-    async connect() {
+    async submitAuth() {
       this.error = ''
-      if (!this.key.trim()) { this.error = '请输入 API Key'; return }
+      try {
+        await this.api('/auth/login', { method: 'POST',
+          body: JSON.stringify({ email: this.form.email, password: this.form.password }) })
+        this.form.password = ''
+        this.me = await this.api('/me')
+        await this.refresh()
+      } catch (e) { this.error = e.message }
+    },
+
+    async logout() {
+      try { await this.api('/auth/logout', { method: 'POST' }) } catch {}
+      this.me = null; this.mode = 'login'
+      this.sites = []; this.contents = []; this.keys = []; this.stats = {}
+    },
+
+    async refresh() {
+      this.error = ''
       try {
         this.stats = await this.api('/stats/overview')
-        this.sites = await this.api('/sites')
-        this.keys = await this.api('/api-keys')
-        this.connected = true
-        sessionStorage.setItem('rankloop_key', this.key)
+        this.sites = await this.enrichSites(await this.api('/sites'))
+        this.keys = await this.api('/api-keys').catch(() => [])
+        if (this.me?.is_platform_admin) {
+          this.tenants = await this.api('/admin/tenants').catch(() => [])
+        }
         if (this.form.siteId) await this.loadContents()
-      } catch (e) { this.connected = false; this.error = e.message }
+      } catch (e) { this.error = e.message }
     },
 
     go(t) { this.tab = t; this.error = '' },
@@ -330,7 +471,7 @@ function app() {
       try {
         await this.api('/sites', { method: 'POST', body: JSON.stringify({ name: this.form.siteName, origin: this.form.siteOrigin }) })
         this.form.siteName = ''; this.form.siteOrigin = ''
-        this.sites = await this.api('/sites')
+        this.sites = await this.enrichSites(await this.api('/sites'))
         this.flash('站点已创建')
       } catch (e) { this.error = e.message }
     },
@@ -376,12 +517,94 @@ function app() {
       } catch (e) { this.error = e.message }
     },
 
+    // 列表接口不含域名信息，逐个补详情（站点数量有限，可接受）
+    async enrichSites(list) {
+      return Promise.all(list.map(async (s) => {
+        try { return { ...s, ...(await this.api('/sites/' + s.id)) } }
+        catch { return s }
+      }))
+    },
+
+    openDomain(site) {
+      this.domainSite = site
+      this.form.domain = site.domain || ''
+      this.domainInfo = null
+      this.domainOpen = true
+    },
+
+    async bindDomain() {
+      this.error = ''
+      try {
+        this.domainInfo = await this.api('/sites/' + this.domainSite.id + '/domain', {
+          method: 'POST', body: JSON.stringify({ domain: this.form.domain }),
+        })
+        this.flash('已绑定，请按提示配置 DNS 后验证')
+      } catch (e) { this.error = e.message }
+    },
+
+    async verifyDomain() {
+      this.error = ''
+      try {
+        const r = await this.api('/sites/' + this.domainSite.id + '/domain/verify', { method: 'POST' })
+        if (r.verified) {
+          this.flash('域名验证通过，已生效：' + r.live_url)
+          this.domainOpen = false
+          this.sites = await this.enrichSites(await this.api('/sites'))
+        } else {
+          this.error = r.reason || '验证未通过'
+        }
+      } catch (e) { this.error = e.message }
+    },
+
+    async unbindDomain() {
+      if (!confirm('解绑后将回退到平台子域名，确定继续？')) return
+      this.error = ''
+      try {
+        await this.api('/sites/' + this.domainSite.id + '/domain', { method: 'DELETE' })
+        this.domainOpen = false
+        this.sites = await this.enrichSites(await this.api('/sites'))
+        this.flash('已解绑')
+      } catch (e) { this.error = e.message }
+    },
+
+    async loadVersions(id) {
+      this.error = ''
+      try {
+        this.versions = await this.api('/contents/' + id + '/versions')
+        this.versionsOpen = true
+      } catch (e) { this.error = e.message }
+    },
+
+    async createTenant() {
+      this.error = ''; this.newKey = ''
+      try {
+        const d = await this.api('/admin/tenants', { method: 'POST',
+          body: JSON.stringify({ name: this.form.tenantName,
+                                 slug: this.form.tenantSlug || undefined }) })
+        this.newKey = d.api_key
+        this.form.tenantName = ''; this.form.tenantSlug = ''
+        this.tenants = await this.api('/admin/tenants')
+        this.flash('租户已创建')
+      } catch (e) { this.error = e.message }
+    },
+
+    async issueKey(t) {
+      this.error = ''; this.newKey = ''
+      try {
+        const d = await this.api('/admin/tenants/' + t.id + '/keys', { method: 'POST',
+          body: JSON.stringify({ name: t.name + ' 的密钥' }) })
+        this.newKey = d.api_key
+        this.flash('已补发，请转交客户')
+      } catch (e) { this.error = e.message }
+    },
+
     async createKey() {
       this.error = ''; this.newKey = ''
       try {
-        const scopes = ['sites:read','sites:write','contents:read','contents:write','contents:publish',
-                        'issues:read','indexing:read','indexing:write','webhooks:write']
-        const d = await this.api('/api-keys', { method: 'POST', body: JSON.stringify({ name: this.form.keyName || 'console key', scopes }) })
+        const ws = this.me?.workspaces?.[0]
+        if (!ws) { this.error = '当前账号没有工作区'; return }
+        const d = await this.api('/me/api-keys', { method: 'POST',
+          body: JSON.stringify({ workspaceId: ws.id, name: this.form.keyName || 'console key' }) })
         this.newKey = d.api_key
         this.form.keyName = ''
         this.keys = await this.api('/api-keys')

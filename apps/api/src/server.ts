@@ -17,9 +17,14 @@ import { isDomainError, mapDomainError } from './interfaces/error-mapper'
 import { consoleRoutes } from './interfaces/console'
 import { publicSiteRoutes } from './interfaces/public-site'
 import { dashboardRoutes } from './interfaces/dashboard'
+import { docsRoutes } from './interfaces/docs'
+import { landingRoutes } from './interfaces/landing'
 import { contentRoutes } from './interfaces/routes/contents'
 import { startIndexNowWorker } from './infrastructure/indexnow-dispatcher'
 import { indexingRoutes } from './interfaces/routes/indexing'
+import { authRoutes, createSessionMiddleware } from './interfaces/routes/auth'
+import { contentDetailRoutes } from './interfaces/routes/content-detail'
+import { siteDomainRoutes } from './interfaces/routes/site-domains'
 import { siteRoutes } from './interfaces/routes/sites'
 import { statsRoutes } from './interfaces/routes/stats'
 import { openApiRoutes } from './interfaces/routes/openapi'
@@ -109,7 +114,32 @@ export async function buildServer(env: Env, prisma: PrismaClient): Promise<Fasti
 
   await app.register(openApiRoutes, { prefix: '/api/v1' })
 
-  // 可视化面板（同进程提供，单容器单域名）
+  // 对外首页（平台域名根路径）。租户站点由 publicSiteRoutes 按 Host 接管。
+  await app.register(async (scoped) => {
+    await landingRoutes(scoped, {
+      ruleCount: listRules().length,
+      criticalCount: listRules().filter((r) => r.severity === 'critical').length,
+    })
+  })
+
+  // 认证：公开路由，用会话 Cookie 而非 API Key
+  await app.register(
+    async (scoped) => {
+      scoped.addHook('preHandler', createSessionMiddleware(prisma))
+      await authRoutes(scoped, prisma, {
+        registrationMode: env.REGISTRATION_MODE,
+        secureCookie: env.NODE_ENV === 'production',
+      })
+    },
+    { prefix: '/api/v1' },
+  )
+
+  // 开发者文档（技术子页，不在首页主推）
+  await app.register(async (scoped) => {
+    await docsRoutes(scoped, listRules().length)
+  })
+
+  // 可视化面板与管理控制台
   await app.register(dashboardRoutes)
   await app.register(consoleRoutes)
 
@@ -132,6 +162,8 @@ export async function buildServer(env: Env, prisma: PrismaClient): Promise<Fasti
       await statsRoutes(scoped, prisma)
       await indexingRoutes(scoped, prisma)
       await siteRoutes(scoped, prisma)
+      await siteDomainRoutes(scoped, prisma, platformDomain)
+      await contentDetailRoutes(scoped, prisma)
     },
     { prefix: '/api/v1' },
   )

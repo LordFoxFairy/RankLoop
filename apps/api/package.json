@@ -12,8 +12,12 @@
   "dependencies": {
     "@prisma/client": "^6.19.3",
     "@rankloop/seo-rules": "*",
+    "argon2": "^0.45.1",
     "fastify": "^5.2.0",
     "zod": "^3.24.1"
   },
-  "devDependencies": { "typescript": "^5.5.3", "vitest": "^3.2.7" }
+  "devDependencies": {
+    "typescript": "^5.5.3",
+    "vitest": "^3.2.7"
+  }
 }

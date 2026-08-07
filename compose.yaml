@@ -24,6 +24,15 @@ services:
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
       REGISTRATION_MODE: ${REGISTRATION_MODE:-invite}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      # 平台根域名：租户站点按 <slug>.<该域名> 路由
+      PLATFORM_DOMAIN: ${PLATFORM_DOMAIN:-rankloop.miaokit.cloud}
+      # 初始管理员，由 seed 脚本读取
+      INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:-admin@example.com}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
+      DEFAULT_MAX_SITES: ${DEFAULT_MAX_SITES:-5}
+      DEFAULT_MAX_CONTENTS: ${DEFAULT_MAX_CONTENTS:-1000}
+      DEFAULT_DAILY_INDEXNOW: ${DEFAULT_DAILY_INDEXNOW:-200}
+      DEFAULT_MAX_WEBHOOKS: ${DEFAULT_MAX_WEBHOOKS:-10}
     # 只绑定回环地址，由反代对外暴露（规格 §12.3）
     ports:
       - "127.0.0.1:8080:8080"

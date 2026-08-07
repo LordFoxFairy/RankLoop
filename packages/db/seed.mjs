@@ -1,71 +1,42 @@
 /**
- * 初始化管理员、工作区、站点与 API Key。
+ * 初始化平台管理员。
  *
- * 明文 API Key 只在本次输出中出现一次，不入库（规格 §6）。
- * 幂等：重复执行不会重建已存在的工作区与站点。
+ * 客户不自助注册——由管理员登录后台创建租户并分配 API Key，
+ * 客户拿到 Key 后直接调接口推内容，无需登录任何界面。
+ *
+ * 幂等：管理员已存在时只更新密码，不重复创建。
  */
-import { createHash, randomBytes } from 'node:crypto'
+import argon2 from 'argon2'
 import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
-const SLUG = process.env.SEED_WORKSPACE_SLUG ?? 'default'
-const ORIGIN = process.env.SEED_SITE_ORIGIN ?? 'https://example.com'
+const email = (process.env.INITIAL_ADMIN_EMAIL ?? 'admin@example.com').toLowerCase()
+const password = process.env.INITIAL_ADMIN_PASSWORD
 
-function generateKey() {
-  const plaintext = `rkl_live_${randomBytes(24).toString('base64url')}`
-  return {
-    plaintext,
-    hash: createHash('sha256').update(plaintext).digest('hex'),
-    prefix: plaintext.slice(0, 15),
-  }
+if (!password) {
+  console.error('缺少 INITIAL_ADMIN_PASSWORD 环境变量')
+  process.exit(1)
+}
+if (password.length < 10) {
+  console.error('INITIAL_ADMIN_PASSWORD 至少 10 个字符')
+  process.exit(1)
 }
 
-const workspace = await prisma.workspace.upsert({
-  where: { slug: SLUG },
-  update: {},
-  create: {
-    slug: SLUG,
-    name: 'Default Workspace',
-    quota: {
-      create: {
-        maxSites: Number(process.env.DEFAULT_MAX_SITES ?? 5),
-        maxContents: Number(process.env.DEFAULT_MAX_CONTENTS ?? 1000),
-        dailyIndexNow: Number(process.env.DEFAULT_DAILY_INDEXNOW ?? 200),
-        maxWebhooks: Number(process.env.DEFAULT_MAX_WEBHOOKS ?? 10),
-      },
-    },
-  },
+const passwordHash = await argon2.hash(password, {
+  type: argon2.argon2id,
+  memoryCost: 19_456,
+  timeCost: 2,
+  parallelism: 1,
 })
 
-const site = await prisma.site.upsert({
-  where: { workspaceId_origin: { workspaceId: workspace.id, origin: ORIGIN } },
-  update: {},
-  create: { workspaceId: workspace.id, name: 'Default Site', origin: ORIGIN },
+const user = await prisma.user.upsert({
+  where: { email },
+  update: { passwordHash, isPlatformAdmin: true, disabledAt: null },
+  create: { email, passwordHash, isPlatformAdmin: true, displayName: '平台管理员' },
 })
 
-const key = generateKey()
-await prisma.apiKey.create({
-  data: {
-    workspaceId: workspace.id,
-    name: 'seed key',
-    keyHash: key.hash,
-    keyPrefix: key.prefix,
-    scopes: [
-      'sites:read',
-      'sites:write',
-      'contents:read',
-      'contents:write',
-      'contents:publish',
-      'issues:read',
-      'indexing:read',
-      'indexing:write',
-      'webhooks:write',
-    ],
-  },
-})
-
-console.log(JSON.stringify({ workspace_id: workspace.id, site_id: site.id, api_key: key.plaintext }, null, 2))
-console.log('\n请立即保存上面的 api_key，它不会再次显示。')
+console.log(`\n✓ 平台管理员已就绪：${user.email}`)
+console.log('  登录后台创建租户并分配 API Key\n')
 
 await prisma.$disconnect()
