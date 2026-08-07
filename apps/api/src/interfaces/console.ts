@@ -124,18 +124,29 @@ const HTML = String.raw`<!doctype html>
                 </template>
               </div>
 
-              <div class="hd-row" style="margin-top:16px">
+              <!-- 发布漏斗：内容从检测到被搜索引擎接收的完整链路，
+                   每一格都是真实数据，让人知道卡在哪一环 -->
+              <div class="funnel">
+                <template x-for="f in funnelSteps()" :key="f.k">
+                  <div class="fn-step" :class="f.done ? 'ok' : (f.count ? 'active' : 'idle')">
+                    <div class="fn-n" x-text="f.count"></div>
+                    <div class="fn-k" x-text="f.k"></div>
+                  </div>
+                </template>
+              </div>
+
+              <div class="hd-row" style="margin-top:14px">
                 <span class="hd-k">近 30 天走势</span>
                 <template x-if="scoreDelta() !== null">
                   <span class="hd-v" :style="'color:'+(scoreDelta()>=0?'var(--gain)':'var(--blocked)')"
                         x-text="(scoreDelta()>=0?'+':'')+scoreDelta()+' 分'"></span>
                 </template>
+                <template x-if="scoreDelta() === null">
+                  <span class="hd-v" style="color:var(--muted);font-weight:400">需要两天数据</span>
+                </template>
               </div>
               <template x-if="scoreTrend.length >= 2">
                 <div x-html="scoreSparkline()"></div>
-              </template>
-              <template x-if="scoreTrend.length < 2">
-                <div class="hd-note">还需要一天的数据才能画出走势</div>
               </template>
             </div>
           </div>
@@ -179,6 +190,9 @@ const HTML = String.raw`<!doctype html>
                         <span x-text="'约 '+fmtMinutes(i.minutes)"></span>
                         <code x-text="i.code"></code>
                       </div>
+                      <div class="impact-bar">
+                        <div class="ib-fill blocked" :style="'width:'+impactWidth(i)+'%'"></div>
+                      </div>
                     </div>
                     <div class="issue-act blocked">发布被阻断</div>
                   </div>
@@ -201,6 +215,11 @@ const HTML = String.raw`<!doctype html>
                         <span x-text="i.count+' 个页面'"></span>
                         <span x-text="'约 '+fmtMinutes(i.minutes)"></span>
                         <code x-text="i.code"></code>
+                      </div>
+                      <!-- 条形长度表达影响范围：参考 Ahrefs 的问题列表，
+                           扫一眼就知道哪条覆盖面最广，比读数字快 -->
+                      <div class="impact-bar">
+                        <div class="ib-fill" :style="'width:'+impactWidth(i)+'%'"></div>
                       </div>
                     </div>
                     <!-- 每页加分而非总和：健康分满分 100，跨页累加会得出 +257 这种无意义的数 -->
@@ -766,6 +785,32 @@ function app() {
         '<circle cx="' + xs(d.length - 1).toFixed(1) + '" cy="' + ys(last.average_score).toFixed(1) +
         '" r="3" fill="' + this.scoreColor(last.average_score) + '"/>' +
         '</svg>'
+    },
+
+    /**
+     * 发布漏斗。
+     *
+     * 闭环有四步：内容 → 通过检测 → 已发布 → 已通知搜索引擎。
+     * 分开看四个数字很难判断卡在哪一环，串成漏斗一眼就能看出。
+     */
+    funnelSteps() {
+      const s = this.stats
+      const total = s.contents?.total ?? 0
+      const ok = s.publishable ?? 0
+      const pub = s.contents?.published ?? 0
+      return [
+        { k: '内容', count: total, done: total > 0 },
+        { k: '通过检测', count: ok, done: total > 0 && ok === total },
+        { k: '已发布', count: pub, done: pub > 0 && pub === ok },
+        { k: '已提交搜索引擎', count: pub, done: pub > 0 },
+      ]
+    },
+
+    /** 条形宽度：以覆盖页面最多的那条为满格，表达相对影响范围 */
+    impactWidth(i) {
+      const all = this.stats.top_issues || []
+      const max = Math.max(1, ...all.map(x => x.count))
+      return Math.max(4, (i.count / max) * 100).toFixed(1)
     },
 
     /** 与区间起点相比的变化，用于「比上周 +5」这类判断 */

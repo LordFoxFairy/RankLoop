@@ -216,6 +216,32 @@ code{font-family:var(--mono);font-size:12px;background:var(--paper);
 .issue-meta{display:flex;gap:12px;flex-wrap:wrap;margin-top:4px;
   font-size:11.5px;color:var(--muted)}
 .issue-meta code{font-family:var(--mono);font-size:11px;opacity:.75}
+/* 发布漏斗：四步串联，箭头连接表达流转关系 */
+.funnel{display:flex;align-items:stretch;gap:0;margin-top:14px}
+.fn-step{flex:1;text-align:center;padding:10px 6px;position:relative;
+  border-radius:8px;background:var(--paper);min-width:0}
+.fn-step + .fn-step{margin-left:14px}
+.fn-step + .fn-step::before{content:'';position:absolute;left:-11px;top:50%;
+  width:8px;height:8px;border-top:1.5px solid var(--line);
+  border-right:1.5px solid var(--line);transform:translateY(-50%) rotate(45deg)}
+.fn-n{font:680 20px/1.1 var(--mono);color:var(--faint)}
+.fn-k{font-size:11px;color:var(--muted);margin-top:3px;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.fn-step.ok .fn-n{color:var(--gain)}
+.fn-step.ok{background:var(--gain-soft)}
+.fn-step.active .fn-n{color:var(--accent)}
+.fn-step.active{background:var(--accent-soft)}
+@media(max-width:640px){.funnel{flex-wrap:wrap;gap:8px}
+  .fn-step{flex:1 1 44%;margin-left:0!important}
+  .fn-step::before{display:none!important}}
+
+/* 影响范围条：以覆盖页面最多的一条为满格，扫一眼看出相对广度 */
+.impact-bar{height:4px;background:var(--line);border-radius:3px;margin-top:8px;
+  max-width:340px;overflow:hidden}
+.ib-fill{height:100%;background:var(--accent);border-radius:3px;
+  transition:width .3s ease}
+.ib-fill.blocked{background:var(--blocked)}
+
 .issue-act{flex:none;font-size:12px;font-weight:600;white-space:nowrap;
   font-family:var(--mono);font-variant-numeric:tabular-nums}
 .issue-act.blocked{color:var(--blocked)}
