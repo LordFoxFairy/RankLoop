@@ -51,8 +51,8 @@ html,body{height:100%}
 body{margin:0;color:var(--text);font:14px/1.6 var(--sans);
   -webkit-font-smoothing:antialiased;
   background:
-    radial-gradient(1200px 620px at 88% -6%, #e6f2ee 0%, transparent 62%),
-    radial-gradient(1000px 560px at 6% 104%, #e9eef7 0%, transparent 58%),
+    radial-gradient(1100px 580px at 90% -8%, #d9ede6 0%, transparent 58%),
+    radial-gradient(950px 520px at 4% 106%, #dde5f3 0%, transparent 55%),
     var(--paper);
   background-attachment:fixed}
 @media(prefers-color-scheme:dark){
@@ -83,7 +83,13 @@ button,input,select,textarea{font:inherit;color:inherit}
 /* 选中态用淡蓝底 + 蓝字，比纯色填充轻，也更好读 */
 .nav-item[aria-current="page"]{background:var(--side-active);color:var(--accent);
   font-weight:600}
-.nav-item .ic{width:17px;height:17px;flex:none;opacity:.9}
+.nav-item .ic-wrap{width:28px;height:28px;flex:none;border-radius:8px;
+  display:flex;align-items:center;justify-content:center;
+  background:color-mix(in srgb, var(--tint) 11%, transparent);
+  transition:background .14s}
+.nav-item .ic{width:16px;height:16px}
+.nav-item:hover .ic-wrap{background:color-mix(in srgb, var(--tint) 18%, transparent)}
+.nav-item[aria-current="page"] .ic-wrap{background:color-mix(in srgb, var(--tint) 20%, transparent)}
 .nav-item .badge{margin-left:auto;font:600 11px/1 var(--mono);
   background:var(--blocked);color:#fff;padding:3px 6px;border-radius:20px}
 .side-foot{margin-top:auto;padding:16px 18px;border-top:1px solid rgba(16,24,40,.07);
@@ -93,10 +99,10 @@ button,input,select,textarea{font:inherit;color:inherit}
 .side-foot button:hover{color:var(--accent)}
 
 .main{min-width:0;display:flex;flex-direction:column}
-.topbar{display:flex;align-items:center;gap:14px;padding:18px 26px 0;flex-wrap:wrap}
+.topbar{display:flex;align-items:center;gap:14px;padding:22px 30px 0;flex-wrap:wrap}
 .topbar h1{font-size:21px;margin:0;letter-spacing:-.015em;font-weight:670}
 .topbar .sub{color:var(--muted);font-size:13px}
-.content{padding:18px 26px 40px;flex:1}
+.content{padding:22px 30px 48px;flex:1;max-width:1440px;width:100%}
 
 /* ── 通用块 ── */
 /* 卡片用柔和阴影而非硬边框：参考设计里所有容器都是「浮起」而非「框住」 */
@@ -124,8 +130,8 @@ button,input,select,textarea{font:inherit;color:inherit}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 
 /* ── 指标卡 ── */
-.metrics{display:grid;gap:13px;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));
-  margin-bottom:18px}
+.metrics{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));
+  margin-bottom:20px}
 .metric{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);
   padding:16px 18px;transition:box-shadow .16s,transform .16s}
 .metric:hover{box-shadow:var(--shadow-lift)}
@@ -135,7 +141,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .metric .d{font-size:12px;color:var(--muted);margin-top:5px}
 
 /* ── 内容卡片网格 ── */
-.grid{display:grid;gap:13px;grid-template-columns:repeat(auto-fill,minmax(310px,1fr))}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fill,minmax(310px,1fr))}
 .card{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);
   padding:17px;display:flex;flex-direction:column;gap:12px;transition:.16s}
 /* hover 用描边+浮起，与参考图里选中卡的蓝色描边一致 */
@@ -206,9 +212,9 @@ code{font-family:var(--mono);font-size:12px;background:var(--paper);
 .ob-now b{color:var(--accent)}
 
 /* 健康分主视觉：环形 + 分布 + 走势并排，参考 Ahrefs Site Audit 概览 */
-.hero-health{display:grid;grid-template-columns:auto 1fr;gap:32px;align-items:center;
+.hero-health{display:grid;grid-template-columns:auto 1fr;gap:34px;align-items:center;
   background:var(--surface);border-radius:16px;box-shadow:var(--shadow);
-  padding:24px 28px;margin-bottom:16px}
+  padding:26px 30px;margin-bottom:20px}
 .ring-wrap{flex:none;display:flex;align-items:center;justify-content:center;
   width:132px;height:132px}
 .ring-wrap svg{width:100%;height:100%}
@@ -253,7 +259,7 @@ code{font-family:var(--mono);font-size:12px;background:var(--paper);
 .pt-note{font-size:12px;color:var(--muted);margin-top:7px}
 
 /* 发布之后：闭环后半段的紧凑展示，与「下一步该修什么」并列 */
-.search-strip{margin-bottom:16px}
+.search-strip{margin-bottom:20px}
 .ss-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
   gap:1px;background:var(--line)}
 .ss{background:var(--surface);padding:14px 18px}
@@ -355,14 +361,32 @@ export const ICONS: Record<string, string> = {
   tenants: '<path d="M4 20V8l6-4 6 4v12M4 20h16M10 20v-5h4v5"/>',
 }
 
+/**
+ * 每个导航项一个专属色。
+ *
+ * 参考设计里每个入口都有独立品牌色，扫一眼就能定位，
+ * 比清一色描边图标快得多。色相按功能分组：
+ * 蓝=工作、青绿=数据、紫棕=管理。
+ */
+const ICON_TINT: Record<string, string> = {
+  overview: '#1456d0',
+  contents: '#0e9f6e',
+  sites: '#7c5cff',
+  search: '#0891b2',
+  audit: '#b4690e',
+  keys: '#c8322b',
+  tenants: '#7c5cff',
+}
+
 export function icon(name: string): string {
-  return `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-    stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"
-    aria-hidden="true">${ICONS[name] ?? ''}</svg>`
+  const tint = ICON_TINT[name] ?? 'currentColor'
+  return `<span class="ic-wrap" style="--tint:${tint}"><svg class="ic" viewBox="0 0 24 24"
+    fill="none" stroke="var(--tint)" stroke-width="1.8" stroke-linecap="round"
+    stroke-linejoin="round" aria-hidden="true">${ICONS[name] ?? ''}</svg></span>`
 }
 
 export const LOGO = `<svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
-  <rect width="32" height="32" rx="7" fill="#2f5fd8"/>
+  <rect width="32" height="32" rx="7" fill="#1456d0"/>
   <path d="M9 21V11h6a3 3 0 0 1 0 6h-3l5 4" stroke="#fff" stroke-width="2.4"
     stroke-linecap="round" stroke-linejoin="round"/>
 </svg>`
