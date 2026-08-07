@@ -78,6 +78,15 @@ export async function statsRoutes(app: FastifyInstance, prisma: PrismaClient): P
         top_issues: topIssues,
         publishable: current.filter((c) => c.criticalCount === 0).length,
         blocked: current.filter((c) => c.criticalCount > 0).length,
+        // 分数分布而非仅均值：均分 87 可能是「全部 87」，
+        // 也可能是「一半 100 一半 74」——后者才需要行动。
+        // Ahrefs 的健康分历史图同样展示分档堆叠而非单一均值。
+        distribution: [
+          { band: 'excellent', min: 90, label: '优秀', count: current.filter((c) => c.score >= 90).length },
+          { band: 'good', min: 70, label: '良好', count: current.filter((c) => c.score >= 70 && c.score < 90).length },
+          { band: 'fair', min: 50, label: '一般', count: current.filter((c) => c.score >= 50 && c.score < 70).length },
+          { band: 'poor', min: 0, label: '较差', count: current.filter((c) => c.score < 50).length },
+        ],
       },
       meta: { request_id: req.id },
     })

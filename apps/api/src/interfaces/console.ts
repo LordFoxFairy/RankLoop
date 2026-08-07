@@ -105,11 +105,42 @@ const HTML = String.raw`<!doctype html>
       <!-- 总览 -->
       <template x-if="tab==='overview'">
         <div>
+          <!-- 健康分主视觉：参考 Ahrefs Site Audit，环形比数字更快传达
+               「距离满分还差多少」；旁边配分布与走势，避免均值掩盖分化 -->
+          <div class="hero-health">
+            <div class="ring-wrap" x-html="scoreRing(stats.health?.average_score, '132px')"></div>
+
+            <div class="health-detail">
+              <div class="hd-row">
+                <span class="hd-k">内容分数分布</span>
+                <span class="hd-v" x-text="(stats.contents?.total ?? 0)+' 篇'"></span>
+              </div>
+              <div x-html="distributionBar()"></div>
+              <div class="legend">
+                <template x-for="b in (stats.distribution || []).filter(x=>x.count)" :key="b.band">
+                  <span class="lg"><i :class="'dot d-'+b.band"></i>
+                    <span x-text="b.label"></span>
+                    <b x-text="b.count"></b></span>
+                </template>
+              </div>
+
+              <div class="hd-row" style="margin-top:16px">
+                <span class="hd-k">近 30 天走势</span>
+                <template x-if="scoreDelta() !== null">
+                  <span class="hd-v" :style="'color:'+(scoreDelta()>=0?'var(--gain)':'var(--blocked)')"
+                        x-text="(scoreDelta()>=0?'+':'')+scoreDelta()+' 分'"></span>
+                </template>
+              </div>
+              <template x-if="scoreTrend.length >= 2">
+                <div x-html="scoreSparkline()"></div>
+              </template>
+              <template x-if="scoreTrend.length < 2">
+                <div class="hd-note">还需要一天的数据才能画出走势</div>
+              </template>
+            </div>
+          </div>
+
           <div class="metrics">
-            <div class="metric"><div class="k">平均健康分</div>
-              <div class="v" :style="'color:'+scoreColor(stats.health?.average_score)"
-                   x-text="stats.health?.average_score ?? '—'"></div>
-              <div class="d" x-text="(stats.contents?.total ?? 0)+' 篇内容'"></div></div>
             <div class="metric"><div class="k">可以发布</div>
               <div class="v" style="color:var(--gain)" x-text="stats.publishable ?? 0"></div>
               <div class="d">无阻断问题</div></div>
@@ -120,6 +151,9 @@ const HTML = String.raw`<!doctype html>
             <div class="metric"><div class="k">已发布</div>
               <div class="v" x-text="stats.contents?.published ?? 0"></div>
               <div class="d" x-text="(stats.sites ?? 0)+' 个站点'"></div></div>
+            <div class="metric"><div class="k">待修复问题</div>
+              <div class="v" x-text="(stats.top_issues || []).reduce((s,i)=>s+i.count,0)"></div>
+              <div class="d" x-text="(stats.top_issues?.length ?? 0)+' 类问题'"></div></div>
           </div>
 
           <div class="panel">
@@ -594,6 +628,7 @@ function app() {
   return {
     me: null, error: '', notice: '', rulesCount: 0, tenants: [],
     perf: null, keywords: [], trend: [], searchDays: '28', syncing: false, auditRows: [],
+    scoreTrend: [],
     recs: [], impact: null,
     tab: 'overview', tabs: [
       { id: 'overview', label: '总览' },
@@ -631,6 +666,88 @@ function app() {
       return s >= 80 ? 'var(--gain)' : s >= 60 ? 'var(--warn)' : 'var(--blocked)'
     },
 
+    /**
+     * 健康分环形图。
+     *
+     * 参考 Ahrefs Site Audit 的健康分展示：环形比数字更快传达
+     * 「距离满分还差多少」。用 stroke-dasharray 画弧，无需图表库。
+     */
+    scoreRing(score, size) {
+      const s = score ?? 0
+      const r = 42, c = 2 * Math.PI * r
+      const dash = (s / 100) * c
+      const col = this.scoreColor(score)
+      return '<svg viewBox="0 0 100 100" style="width:' + size + ';height:' + size + '" ' +
+        'role="img" aria-label="健康分 ' + (score ?? '暂无') + '">' +
+        '<circle cx="50" cy="50" r="' + r + '" fill="none" stroke="var(--line)" stroke-width="9"/>' +
+        (score === null || score === undefined ? '' :
+          '<circle cx="50" cy="50" r="' + r + '" fill="none" stroke="' + col + '" stroke-width="9" ' +
+          'stroke-linecap="round" stroke-dasharray="' + dash.toFixed(1) + ' ' + c.toFixed(1) + '" ' +
+          'transform="rotate(-90 50 50)"/>') +
+        '<text x="50" y="52" text-anchor="middle" dominant-baseline="middle" ' +
+        'font-size="30" font-weight="700" fill="' + col + '" ' +
+        'font-family="ui-monospace,monospace">' + (score ?? '—') + '</text>' +
+        '<text x="50" y="70" text-anchor="middle" font-size="9" fill="var(--muted)">满分 100</text>' +
+        '</svg>'
+    },
+
+    /**
+     * 分数分布条。
+     *
+     * 参考 Ahrefs 的分档堆叠：均分掩盖分化——「均分 87」可能是
+     * 全部 87，也可能一半 100 一半 74，后者才需要行动。
+     */
+    distributionBar() {
+      const d = this.stats.distribution || []
+      const total = d.reduce((s, x) => s + x.count, 0)
+      if (!total) return ''
+      const colors = { excellent: 'var(--gain)', good: '#5aa06f',
+                       fair: 'var(--warn)', poor: 'var(--blocked)' }
+      let x = 0
+      const segs = d.filter(b => b.count > 0).map(b => {
+        const w = (b.count / total) * 100
+        const rect = '<rect x="' + x.toFixed(2) + '" y="0" width="' + w.toFixed(2) + '" height="10" ' +
+          'fill="' + colors[b.band] + '"><title>' + b.label + '：' + b.count + ' 篇</title></rect>'
+        x += w
+        return rect
+      }).join('')
+      return '<svg viewBox="0 0 100 10" preserveAspectRatio="none" ' +
+        'style="width:100%;height:10px;border-radius:5px;overflow:hidden" ' +
+        'role="img" aria-label="内容分数分布">' + segs + '</svg>'
+    },
+
+    /**
+     * 健康分走势迷你图。
+     *
+     * 参考 Google Search Console：仍在收集中的数据用虚线画，
+     * 避免用户把尚未稳定的数值当成结论。
+     */
+    scoreSparkline() {
+      const d = this.scoreTrend || []
+      if (d.length < 2) return ''
+      const w = 260, h = 44, pad = 4
+      const vals = d.map(x => x.average_score)
+      const lo = Math.min(...vals, 60), hi = 100
+      const xs = i => pad + i * (w - pad * 2) / (d.length - 1)
+      const ys = v => h - pad - ((v - lo) / (hi - lo || 1)) * (h - pad * 2)
+      const path = d.map((x, i) => (i ? 'L' : 'M') + xs(i).toFixed(1) + ' ' + ys(x.average_score).toFixed(1)).join(' ')
+      const last = d[d.length - 1]
+      return '<svg viewBox="0 0 ' + w + ' ' + h + '" style="width:100%;height:44px" ' +
+        'role="img" aria-label="健康分走势">' +
+        '<path d="' + path + '" fill="none" stroke="' + this.scoreColor(last.average_score) +
+        '" stroke-width="2" stroke-linejoin="round"/>' +
+        '<circle cx="' + xs(d.length - 1).toFixed(1) + '" cy="' + ys(last.average_score).toFixed(1) +
+        '" r="3" fill="' + this.scoreColor(last.average_score) + '"/>' +
+        '</svg>'
+    },
+
+    /** 与区间起点相比的变化，用于「比上周 +5」这类判断 */
+    scoreDelta() {
+      const d = this.scoreTrend || []
+      if (d.length < 2) return null
+      return d[d.length - 1].average_score - d[0].average_score
+    },
+
     flash(msg) { this.notice = msg; setTimeout(() => { this.notice = '' }, 4000) },
 
     async boot() {
@@ -660,6 +777,8 @@ function app() {
       this.error = ''
       try {
         this.stats = await this.api('/stats/overview')
+        // 走势与总览并行取：没有历史对比，单个分数说明不了变好还是变差
+        this.scoreTrend = await this.api('/stats/trend?days=30').catch(() => [])
         this.sites = await this.enrichSites(await this.api('/sites'))
         this.keys = await this.api('/api-keys').catch(() => [])
         if (this.me?.is_platform_admin) {

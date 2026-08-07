@@ -159,6 +159,28 @@ code{font-family:var(--mono);font-size:12px;background:var(--paper);
 .rec-cost .g{font:680 15px/1.2 var(--mono);color:var(--gain)}
 .rec-cost .m{font-size:11.5px;color:var(--muted);margin-top:2px}
 
+/* 健康分主视觉：环形 + 分布 + 走势并排，参考 Ahrefs Site Audit 概览 */
+.hero-health{display:grid;grid-template-columns:auto 1fr;gap:30px;align-items:center;
+  background:var(--surface);border:1px solid var(--line);border-radius:14px;
+  padding:22px 26px;margin-bottom:16px}
+.ring-wrap{flex:none;display:flex;align-items:center;justify-content:center}
+.health-detail{min-width:0}
+.hd-row{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px}
+.hd-k{font-size:12.5px;color:var(--muted)}
+.hd-v{font-size:13px;font-weight:640;font-family:var(--mono);
+  font-variant-numeric:tabular-nums}
+.hd-note{font-size:12.5px;color:var(--muted);padding:10px 0}
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:9px}
+.lg{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted)}
+.lg b{font-family:var(--mono);color:var(--text);font-weight:640}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.d-excellent{background:var(--gain)}
+.d-good{background:#5aa06f}
+.d-fair{background:var(--warn)}
+.d-poor{background:var(--blocked)}
+@media(max-width:720px){.hero-health{grid-template-columns:1fr;gap:18px;text-align:center}
+  .legend{justify-content:center}}
+
 /* 问题分组：阻断发布与可选优化在视觉上必须一眼分得开 */
 .issue-group + .issue-group{border-top:1px solid var(--line)}
 .group-head{padding:11px 18px;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
