@@ -23,10 +23,13 @@ export async function statsRoutes(app: FastifyInstance, prisma: PrismaClient): P
       prisma.site.count({
         where: { ...(req.user?.isPlatformAdmin ? {} : { workspaceId }), archivedAt: null },
       }),
+      // 只统计每个内容的「当前版本」。按 versionId 去重是不够的——
+      // 一个内容修订多次会有多个版本，历史版本全被计入会让
+      // 「8 篇内容」却显示「可发布 35 + 阻塞 5」这种自相矛盾的数字。
       prisma.contentCheck.findMany({
-        where: { version: { content: scope } },
+        where: { version: { content: scope, currentOf: { isNot: null } } },
         orderBy: { createdAt: 'desc' },
-        take: 500,
+        take: 1000,
         select: {
           score: true,
           criticalCount: true,
@@ -35,15 +38,17 @@ export async function statsRoutes(app: FastifyInstance, prisma: PrismaClient): P
           issues: true,
           createdAt: true,
           versionId: true,
+          version: { select: { contentId: true } },
         },
       }),
     ])
 
-    // 每个版本只取最新一次检测，避免同一版本多次检测重复计数
+    // 每个内容只取当前版本的最新一次检测
     const seen = new Set<string>()
     const current = latest.filter((c) => {
-      if (seen.has(c.versionId)) return false
-      seen.add(c.versionId)
+      const key = c.version?.contentId ?? c.versionId
+      if (seen.has(key)) return false
+      seen.add(key)
       return true
     })
 
