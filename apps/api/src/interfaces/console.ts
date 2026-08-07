@@ -324,6 +324,11 @@ const HTML = String.raw`<!doctype html>
                     </div>
                   </div>
                   <div class="card-acts">
+                    <!-- 已发布的直接开线上页；未发布的看渲染后的内容，
+                         否则「发布前长什么样」只能靠猜 -->
+                    <a class="btn sm" x-show="c.url" :href="c.url"
+                       target="_blank" rel="noopener noreferrer">打开线上</a>
+                    <button class="btn sm" @click="preview(c.id)">预览</button>
                     <button class="btn sm" @click="inspect(c.id)">优化建议</button>
                     <button class="btn sm" @click="loadVersions(c.id)">版本</button>
                     <button class="btn sm pri" @click="publish(c.id)"
@@ -664,6 +669,28 @@ const HTML = String.raw`<!doctype html>
   </div>
 </dialog>
 
+<!-- 内容预览：iframe 渲染真实 HTML，未发布的内容也能看 -->
+<dialog x-ref="previewOpen" class="wide"
+        x-effect="previewOpen ? $refs.previewOpen.showModal() : $refs.previewOpen.close()"
+        @close="previewOpen=false">
+  <div class="dlg-head">
+    <h3>内容预览</h3>
+    <span class="sub" x-text="previewMeta"></span>
+  </div>
+  <div class="dlg-body preview-body">
+    <template x-if="previewHtml">
+      <iframe class="preview-frame" :srcdoc="previewHtml"
+              sandbox="allow-same-origin" title="内容预览"></iframe>
+    </template>
+    <template x-if="!previewHtml">
+      <div class="empty">加载中…</div>
+    </template>
+  </div>
+  <div class="dlg-foot">
+    <button class="btn" @click="previewOpen=false">关闭</button>
+  </div>
+</dialog>
+
 <!-- 自有域名 -->
 <dialog x-ref="domainOpen" x-effect="domainOpen ? $refs.domainOpen.showModal() : $refs.domainOpen.close()" @close="domainOpen=false">
   <div class="dlg-head"><h3>自有域名</h3>
@@ -725,6 +752,7 @@ function app() {
     me: null, error: '', notice: '', rulesCount: 0, tenants: [],
     perf: null, keywords: [], trend: [], searchDays: '28', syncing: false, auditRows: [],
     scoreTrend: [], searchSummary: null,
+    previewOpen: false, previewHtml: '', previewMeta: '',
     recs: [], impact: null,
     tab: 'overview', tabs: [
       { id: 'overview', label: '总览' },
@@ -867,6 +895,38 @@ function app() {
     impactWidth(i) {
       const total = this.stats.contents?.total || 1
       return Math.max(3, Math.min(100, (i.count / total) * 100)).toFixed(1)
+    },
+
+    /**
+     * 预览内容。
+     *
+     * 已发布的可以直接开线上地址，但未发布的线上不存在——
+     * 此前控制台完全看不到「这篇内容长什么样」，只能看分数。
+     * 用 iframe + srcdoc 渲染，sandbox 关掉脚本执行。
+     */
+    async preview(id) {
+      this.previewHtml = ''
+      this.previewMeta = ''
+      this.previewOpen = true
+      try {
+        const d = await this.api('/contents/' + id + '?body=1')
+        const body = d.body ?? ''
+        this.previewMeta = d.path + ' · ' + (d.format || '') +
+          (d.status === 'published' ? ' · 已发布' : ' · 未发布')
+        if (!body) {
+          // 详情接口不返回正文时如实说明，不要留一个空白框让人以为坏了
+          this.previewHtml = '<p style="font:14px system-ui;color:#6b7688;padding:24px">' +
+            '该接口未返回正文内容，无法预览。</p>'
+          return
+        }
+        this.previewHtml = d.format === 'markdown'
+          ? '<pre style="font:13px ui-monospace;white-space:pre-wrap;padding:20px">' +
+            body.replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c])) + '</pre>'
+          : body
+      } catch (e) {
+        this.previewHtml = '<p style="font:14px system-ui;color:#c8322b;padding:24px">' +
+          '加载失败：' + e.message + '</p>'
+      }
     },
 
     /** 距离满分还差多少 */

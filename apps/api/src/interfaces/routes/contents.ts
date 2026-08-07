@@ -45,7 +45,7 @@ function serializeCheck(content: Content) {
   }
 }
 
-function serializeContent(content: Content, url: string) {
+function serializeContent(content: Content, url: string, includeBody = false) {
   return {
     id: content.id,
     path: content.path.value,
@@ -56,6 +56,9 @@ function serializeContent(content: Content, url: string) {
     published_at: content.publishedAt,
     check: serializeCheck(content),
     publishable: content.publishable,
+    // 正文按需返回：可达 2MB，列表与提交响应里带上会让每次请求都变重。
+    // 控制台预览需要它，因此 GET 详情支持 ?body=1。
+    ...(includeBody ? { body: content.currentVersion?.body ?? '' } : {}),
   }
 }
 
@@ -108,6 +111,9 @@ export async function contentRoutes(
         bypassTenantCheck: req.user?.isPlatformAdmin === true,
       })
 
+      // 列表也要给出线上地址：没有它，控制台无法提供预览入口
+      const origin = await siteOrigin(req.params.siteId, auth.workspaceId)
+
       return reply.send({
         data: rows.map(({ content, score }) => {
           const check = content.currentVersion?.check
@@ -122,6 +128,10 @@ export async function contentRoutes(
             blocked: check ? !check.passesGate : false,
             blocking_count: check ? check.blockingRules.length : 0,
             published_at: content.publishedAt,
+            // 未发布的内容线上不存在，给 null 而非拼一个必然 404 的地址
+            url: content.status === 'published' && origin
+              ? `${origin}${content.path.value}`
+              : null,
           }
         }),
         meta: { request_id: req.id, count: rows.length },
@@ -129,7 +139,7 @@ export async function contentRoutes(
     },
   )
 
-  app.get<{ Params: { contentId: string } }>(
+  app.get<{ Params: { contentId: string }; Querystring: { body?: string } }>(
     '/contents/:contentId',
     { preHandler: requireScope('contents:read') },
     async (req, reply) => {
@@ -141,7 +151,11 @@ export async function contentRoutes(
       )
       const origin = await siteOrigin(content.siteId, auth.workspaceId)
       return reply.send({
-        data: serializeContent(content, `${origin}${content.path.value}`),
+        data: serializeContent(
+          content,
+          `${origin}${content.path.value}`,
+          req.query.body === '1',
+        ),
         meta: { request_id: req.id },
       })
     },

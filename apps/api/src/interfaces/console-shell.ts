@@ -31,18 +31,10 @@ export const CONSOLE_STYLES = String.raw`
   --radius:14px;
   --shadow:0 1px 2px rgba(16,24,40,.04),0 4px 14px -6px rgba(16,24,40,.08);
   --shadow-lift:0 2px 4px rgba(16,24,40,.05),0 10px 26px -10px rgba(16,24,40,.14);
+  /* 固定浅色：设计基线是浅色方案，跟随系统会让暗色用户看到完全不同的界面 */
+  color-scheme:light;
   --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;
   --sans:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
-}
-@media(prefers-color-scheme:dark){
-  :root{
-    --side:#161b26;--side-active:#1e2a4a;--side-text:#b9c1d1;
-    --paper:#0d1117;--surface:#161b26;--line:#242b39;--text:#e6e9f0;
-    --muted:#98a2b3;--faint:#6b7688;--accent:#5b8def;--accent-soft:#1a2540;
-    --blocked-soft:#3a1d1b;--warn-soft:#3a2c14;--gain-soft:#14301f;
-    --shadow:0 1px 2px rgba(0,0,0,.3);
-    --shadow-lift:0 4px 18px -6px rgba(0,0,0,.5);
-  }
 }
 *{box-sizing:border-box}
 html,body{height:100%}
@@ -55,12 +47,6 @@ body{margin:0;color:var(--text);font:14px/1.6 var(--sans);
     radial-gradient(950px 520px at 4% 106%, #dde5f3 0%, transparent 55%),
     var(--paper);
   background-attachment:fixed}
-@media(prefers-color-scheme:dark){
-  body{background:
-    radial-gradient(1200px 620px at 88% -6%, #14202b 0%, transparent 62%),
-    radial-gradient(1000px 560px at 6% 104%, #141a2a 0%, transparent 58%),
-    var(--paper)}
-}
 button,input,select,textarea{font:inherit;color:inherit}
 
 /* ── 布局骨架 ── */
@@ -316,6 +302,10 @@ code{font-family:var(--mono);font-size:12px;background:var(--paper);
 dialog{border:0;border-radius:14px;padding:0;max-width:min(760px,92vw);width:100%;
   background:var(--surface);color:var(--text);box-shadow:0 24px 64px -20px rgba(10,18,40,.4)}
 dialog::backdrop{background:rgba(10,16,30,.5)}
+/* 预览要够大才看得清版式，正文区不加内边距以免干扰真实渲染 */
+dialog.wide{max-width:min(1080px,94vw)}
+.preview-body{padding:0;max-height:74vh}
+.preview-frame{width:100%;height:74vh;border:0;display:block;background:#fff}
 .dlg-head{padding:17px 20px;border-bottom:1px solid var(--line);
   display:flex;align-items:center;gap:11px}
 .dlg-head h3{margin:0;font-size:15.5px;font-weight:640}
