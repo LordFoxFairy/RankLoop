@@ -11,7 +11,7 @@ describe('环境变量校验', () => {
   it('接受合法配置并填充默认值', () => {
     const env = loadEnv({ ...valid } as NodeJS.ProcessEnv)
     expect(env.PORT).toBe(8080)
-    expect(env.REGISTRATION_MODE).toBe('invite')
+    expect(env.LOG_LEVEL).toBe('info')
   })
 
   it('缺少 DATABASE_URL 时抛错', () => {

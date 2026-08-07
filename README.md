@@ -254,7 +254,6 @@ npm run build
 | `REDIS_URL` | `redis://redis:6379` | Redis 连接串 |
 | `SESSION_SECRET` | — | 至少 32 字节随机值，必填 |
 | `ENCRYPTION_KEY` | — | 至少 32 字节随机值，必填 |
-| `REGISTRATION_MODE` | `invite` | `open` / `invite` / `closed` |
 | `LOG_LEVEL` | `info` | 日志级别 |
 | `DEFAULT_MAX_SITES` | `5` | 每工作区站点数配额 |
 | `DEFAULT_MAX_CONTENTS` | `1000` | 每工作区内容数配额 |

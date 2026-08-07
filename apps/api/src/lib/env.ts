@@ -22,7 +22,6 @@ const schema = z.object({
   REDIS_URL: z.string().min(1).default('redis://redis:6379'),
   SESSION_SECRET: z.string().min(32),
   ENCRYPTION_KEY: z.string().min(32),
-  REGISTRATION_MODE: z.enum(['open', 'invite', 'closed']).default('invite'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   DEFAULT_MAX_SITES: z.coerce.number().int().positive().default(5),
   DEFAULT_MAX_CONTENTS: z.coerce.number().int().positive().default(1000),

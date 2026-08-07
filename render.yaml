@@ -53,7 +53,8 @@ services:
           property: connectionString
       - key: REDIS_URL
         fromService:
-          type: redis
+          # 必须与上面声明的 type 一致；写成已废弃的 redis 会解析不到该服务
+          type: keyvalue
           name: rankloop-redis
           property: connectionString
       # 由 Render 生成随机值；生产环境使用示例密钥会导致启动失败
@@ -61,8 +62,6 @@ services:
         generateValue: true
       - key: ENCRYPTION_KEY
         generateValue: true
-      - key: REGISTRATION_MODE
-        value: closed
       - key: INITIAL_ADMIN_EMAIL
         sync: false
       # 首次启动创建管理员；随机生成后在 Render 控制台查看

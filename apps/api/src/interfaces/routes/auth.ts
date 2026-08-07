@@ -94,7 +94,10 @@ export function requireUser(req: FastifyRequest): { id: string; email: string; i
 export async function authRoutes(
   app: FastifyInstance,
   prisma: PrismaClient,
-  opts: { registrationMode: 'open' | 'invite' | 'closed'; secureCookie: boolean },
+  // 本平台不开放自助注册：账号由平台管理员创建，租户凭签发的 API Key 调用，
+  // 无需登录。因此没有 registrationMode——留一个不生效的开关比没有更危险，
+  // 设成 open 的人会以为自己开放了注册。
+  opts: { secureCookie: boolean },
 ): Promise<void> {
   /**
    * 创建租户工作区并签发 API Key。

@@ -137,7 +137,6 @@ export async function buildServer(env: Env, prisma: PrismaClient): Promise<Fasti
     async (scoped) => {
       scoped.addHook('preHandler', createSessionMiddleware(prisma))
       await authRoutes(scoped, prisma, {
-        registrationMode: env.REGISTRATION_MODE,
         secureCookie: env.NODE_ENV === 'production',
       })
     },

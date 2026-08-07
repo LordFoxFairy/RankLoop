@@ -22,7 +22,6 @@ services:
       REDIS_URL: redis://redis:6379
       SESSION_SECRET: ${SESSION_SECRET}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
-      REGISTRATION_MODE: ${REGISTRATION_MODE:-invite}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       # 平台根域名：租户站点按 <slug>.<该域名> 路由
       PLATFORM_DOMAIN: ${PLATFORM_DOMAIN:-rankloop.miaokit.cloud}
