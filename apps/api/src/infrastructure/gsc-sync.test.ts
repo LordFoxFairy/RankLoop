@@ -290,3 +290,50 @@ describe('全站自动同步', () => {
     expect(r.synced).toBe(0)
   })
 })
+
+describe('Search Console 资源类型', () => {
+  it('支持网域资源覆盖——GSC 现在默认推荐 sc-domain 形式', () => {
+    // 猜错资源类型 Google 只回 403，没有别的线索，因此必须允许显式指定
+    expect(
+      gscSiteUrl({
+        origin: 'https://acme.rankloop.miaokit.cloud',
+        domain: 'acme.com',
+        domainVerifiedAt: new Date(),
+        settings: { gscProperty: 'sc-domain:acme.com' },
+      }),
+    ).toBe('sc-domain:acme.com')
+  })
+
+  it('未设置覆盖时走网址前缀形式', () => {
+    expect(
+      gscSiteUrl({
+        origin: 'https://acme.example.org',
+        domain: null,
+        domainVerifiedAt: null,
+        settings: {},
+      }),
+    ).toBe('https://acme.example.org/')
+  })
+
+  it('空白覆盖值视为未设置，不会生成非法资源地址', () => {
+    expect(
+      gscSiteUrl({
+        origin: 'https://acme.example.org',
+        domain: null,
+        domainVerifiedAt: null,
+        settings: { gscProperty: '   ' },
+      }),
+    ).toBe('https://acme.example.org/')
+  })
+
+  it('settings 为 null 时不崩', () => {
+    expect(
+      gscSiteUrl({
+        origin: 'https://acme.example.org',
+        domain: null,
+        domainVerifiedAt: null,
+        settings: null,
+      }),
+    ).toBe('https://acme.example.org/')
+  })
+})
