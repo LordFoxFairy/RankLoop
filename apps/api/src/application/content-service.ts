@@ -136,12 +136,23 @@ export class ContentService {
     return content
   }
 
-  async get(contentId: string, workspaceId: string): Promise<Content> {
+  async get(contentId: string, workspaceId: string, bypassTenantCheck = false): Promise<Content> {
+    if (bypassTenantCheck) {
+      const c = await this.deps.contents.findByIdAnyTenant(contentId)
+      if (c) return c
+    }
     return this.requireContent(contentId, workspaceId)
   }
 
-  async list(params: { siteId: string; workspaceId: string; status?: string; limit: number }) {
-    await this.requireSite(params.siteId, params.workspaceId)
+  async list(params: {
+    siteId: string
+    workspaceId: string
+    status?: string
+    limit: number
+    /** 平台管理员跨租户查看，跳过工作区归属校验 */
+    bypassTenantCheck?: boolean
+  }) {
+    if (!params.bypassTenantCheck) await this.requireSite(params.siteId, params.workspaceId)
     return this.deps.contents.listBySite(params)
   }
 

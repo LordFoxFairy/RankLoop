@@ -11,13 +11,16 @@ import { requireScope } from '../../lib/auth'
 export async function statsRoutes(app: FastifyInstance, prisma: PrismaClient): Promise<void> {
   app.get('/stats/overview', { preHandler: requireScope('contents:read') }, async (req, reply) => {
     const { workspaceId } = req.auth!
-    const scope = { site: { workspaceId } }
+    // 平台管理员统计全部租户，用于掌握平台整体状况
+    const scope = req.user?.isPlatformAdmin ? {} : { site: { workspaceId } }
 
     const [total, published, draft, sites, latest] = await Promise.all([
       prisma.content.count({ where: scope }),
       prisma.content.count({ where: { ...scope, status: 'published' } }),
       prisma.content.count({ where: { ...scope, status: 'draft' } }),
-      prisma.site.count({ where: { workspaceId, archivedAt: null } }),
+      prisma.site.count({
+        where: { ...(req.user?.isPlatformAdmin ? {} : { workspaceId }), archivedAt: null },
+      }),
       prisma.contentCheck.findMany({
         where: { version: { content: scope } },
         orderBy: { createdAt: 'desc' },

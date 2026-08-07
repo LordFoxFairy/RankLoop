@@ -103,17 +103,25 @@ export async function contentRoutes(
         workspaceId: auth.workspaceId,
         status: req.query.status,
         limit: Math.min(Number(req.query.limit) || 50, 200),
+        bypassTenantCheck: req.user?.isPlatformAdmin === true,
       })
 
       return reply.send({
-        data: rows.map(({ content, score }) => ({
-          id: content.id,
-          path: content.path.value,
-          format: content.format,
-          status: content.status,
-          score,
-          published_at: content.publishedAt,
-        })),
+        data: rows.map(({ content, score }) => {
+          const check = content.currentVersion?.check
+          return {
+            id: content.id,
+            path: content.path.value,
+            format: content.format,
+            status: content.status,
+            score,
+            // 是否被发布门槛拦截。不能用分数推断——
+            // 57 分可能全是 warning，而 0 分未必有 critical。
+            blocked: check ? !check.passesGate : false,
+            blocking_count: check ? check.blockingRules.length : 0,
+            published_at: content.publishedAt,
+          }
+        }),
         meta: { request_id: req.id, count: rows.length },
       })
     },
@@ -124,7 +132,11 @@ export async function contentRoutes(
     { preHandler: requireScope('contents:read') },
     async (req, reply) => {
       const auth = req.auth!
-      const content = await service.get(req.params.contentId, auth.workspaceId)
+      const content = await service.get(
+        req.params.contentId,
+        auth.workspaceId,
+        req.user?.isPlatformAdmin === true,
+      )
       const origin = await siteOrigin(content.siteId, auth.workspaceId)
       return reply.send({
         data: serializeContent(content, `${origin}${content.path.value}`),

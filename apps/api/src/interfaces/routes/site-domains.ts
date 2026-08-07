@@ -26,8 +26,13 @@ export async function siteDomainRoutes(
     { preHandler: requireScope('sites:read') },
     async (req, reply) => {
       const { workspaceId } = req.auth!
+      // 平台管理员可查看任意租户站点
       const site = await prisma.site.findFirst({
-        where: { id: req.params.siteId, workspaceId, archivedAt: null },
+        where: {
+          id: req.params.siteId,
+          ...(req.user?.isPlatformAdmin ? {} : { workspaceId }),
+          archivedAt: null,
+        },
         include: {
           workspace: { select: { customDomainEnabled: true } },
           indexNowKey: true,

@@ -14,12 +14,16 @@ import type { ContentFormat, ContentPath } from './values'
  */
 export interface ContentRepository {
   findById(id: string, workspaceId: string): Promise<Content | null>
+  /** 跨租户查找，仅供平台管理员使用；普通路径必须走 findById */
+  findByIdAnyTenant(id: string): Promise<Content | null>
   findByPath(siteId: string, path: ContentPath, workspaceId: string): Promise<Content | null>
   listBySite(params: {
     siteId: string
     workspaceId: string
     status?: string
     limit: number
+    /** 平台管理员跨租户查看 */
+    bypassTenantCheck?: boolean
   }): Promise<Array<{ content: Content; score: number | null }>>
   countByWorkspace(workspaceId: string): Promise<number>
   /** 保存新建聚合及其首个版本 */

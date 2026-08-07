@@ -26,8 +26,10 @@ import { badRequest } from '../error-mapper'
 export async function siteRoutes(app: FastifyInstance, prisma: PrismaClient): Promise<void> {
   app.get('/sites', { preHandler: requireScope('sites:read') }, async (req, reply) => {
     const { workspaceId } = req.auth!
+    // 平台管理员查看全部租户站点；普通凭据只看自己工作区的
+    const scope = req.user?.isPlatformAdmin ? {} : { workspaceId }
     const sites = await prisma.site.findMany({
-      where: { workspaceId, archivedAt: null },
+      where: { ...scope, archivedAt: null },
       orderBy: { createdAt: 'desc' },
       include: { _count: { select: { contents: true } }, indexNowKey: true },
     })

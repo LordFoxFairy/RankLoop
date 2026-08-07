@@ -69,6 +69,12 @@ export class PrismaContentRepository implements ContentRepository {
     return row ? this.toDomain(row) : null
   }
 
+  /** 跨租户查找：平台管理员需要查看任意租户的内容 */
+  async findByIdAnyTenant(id: string): Promise<Content | null> {
+    const row = await this.prisma.content.findUnique({ where: { id }, include: contentInclude })
+    return row ? this.toDomain(row) : null
+  }
+
   async findByPath(
     siteId: string,
     path: ContentPath,
@@ -86,10 +92,16 @@ export class PrismaContentRepository implements ContentRepository {
     workspaceId: string
     status?: string
     limit: number
+    bypassTenantCheck?: boolean
   }): Promise<Array<{ content: Content; score: number | null }>> {
     const status = params.status as 'draft' | 'published' | 'archived' | undefined
     const rows = await this.prisma.content.findMany({
-      where: { siteId: params.siteId, site: { workspaceId: params.workspaceId }, ...(status ? { status } : {}) },
+      where: {
+        siteId: params.siteId,
+        // 平台管理员跨租户查看时不加工作区过滤
+        ...(params.bypassTenantCheck ? {} : { site: { workspaceId: params.workspaceId } }),
+        ...(status ? { status } : {}),
+      },
       include: contentInclude,
       orderBy: { updatedAt: 'desc' },
       take: params.limit,

@@ -1,16 +1,50 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { extname, join } from 'node:path'
 import type { FastifyInstance } from 'fastify'
+import { CONSOLE_STYLES, LOGO, icon } from './console-shell'
 
 /**
  * 管理控制台。
  *
- * 技术选型：Alpine.js + Pico CSS，两者均本地内置（无 CDN 依赖）。
- * 不使用 Next.js/React：那需要独立构建产物与第二个进程，
- * 与「单容器一键部署」冲突；本控制台的交互复杂度也用不上。
+ * 布局：左侧固定导航 + 内容区。取代原先的水平标签页——
+ * 导航项随功能增长会挤不下，且无法分组。
  *
- * 所有数据来自 /api/v1 真实接口，无演示数据（规格 §0 第 7 条）。
+ * 技术选型：Alpine.js + 自写样式，本地内置无 CDN。
+ * 不用 React/Next：需要独立构建产物与第二个进程，与单容器部署冲突。
+ *
+ * 数据全部来自 /api/v1 真实接口，无演示数据（规格 §0 第 7 条）。
  */
+
+const NAV = [
+  { group: '工作', items: [
+    { id: 'overview', label: '总览' },
+    { id: 'contents', label: '内容' },
+    { id: 'sites', label: '站点' },
+  ]},
+  { group: '数据', items: [
+    { id: 'search', label: '搜索表现' },
+    { id: 'audit', label: '操作记录' },
+  ]},
+  { group: '管理', items: [
+    { id: 'keys', label: '密钥' },
+    { id: 'tenants', label: '租户' },
+  ]},
+] as const
+
+const navHtml = NAV.map(
+  (g) => `<div class="nav-group">
+  <div class="nav-label">${g.group}</div>
+  ${g.items
+    .map(
+      (i) => `<button class="nav-item" @click="go('${i.id}')"
+    :aria-current="tab==='${i.id}'?'page':false">
+    ${icon(i.id)}<span>${i.label}</span>
+    ${i.id === 'contents' ? `<span class="badge" x-show="stats.blocked" x-text="stats.blocked"></span>` : ''}
+  </button>`,
+    )
+    .join('\n  ')}
+</div>`,
+).join('\n')
 
 const HTML = String.raw`<!doctype html>
 <html lang="zh-CN">
@@ -18,216 +52,197 @@ const HTML = String.raw`<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/assets/pico.css">
-<title>RankLoop 管理控制台</title>
-<style>
-:root{--pico-font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
-body{padding:0}
-.topbar{display:flex;align-items:center;gap:14px;padding:12px 22px;
-  border-bottom:1px solid var(--pico-muted-border-color);flex-wrap:wrap}
-.topbar strong{font-size:16px}
-.topbar input{margin:0;width:290px;font-size:13px}
-.topbar button{margin:0;width:auto;padding:7px 14px;font-size:13px}
-main{padding:20px 22px;max-width:1240px;margin:0 auto}
-/* Pico 给 nav 的直接子元素加了 flex:1，会把标签拉满整行 */
-nav.tabs{display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap;justify-content:flex-start}
-nav.tabs>button{flex:0 0 auto}
-/* Pico 的 button 默认是白字（配深色底），未选中态背景透明会导致文字不可见，
-   必须显式指定前景色而非依赖 --pico-color */
-nav.tabs button{width:auto;margin:0;padding:6px 15px;font-size:13px;
-  background:transparent;color:var(--pico-contrast);
-  border:1px solid var(--pico-muted-border-color)}
-nav.tabs button:hover{background:var(--pico-secondary-background);
-  color:var(--pico-secondary-inverse)}
-nav.tabs button[aria-current="page"]{background:var(--pico-primary);
-  color:var(--pico-primary-inverse);border-color:var(--pico-primary)}
-.cards{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));margin-bottom:20px}
-article{margin:0;padding:16px}
-article h4{margin:0 0 6px;font-size:12px;text-transform:uppercase;
-  letter-spacing:.5px;color:var(--pico-muted-color);font-weight:500}
-.big{font-size:28px;font-weight:700;line-height:1.2;font-variant-numeric:tabular-nums}
-table{font-size:13px;margin:0}
-th{font-size:12px;color:var(--pico-muted-color)}
-td,th{padding:8px 10px}
-.pill{font-size:11px;padding:2px 8px;border-radius:99px;white-space:nowrap;
-  display:inline-block;font-weight:500}
-.p-critical{background:#fde8e8;color:#b42318}
-.p-warning{background:#fef3e2;color:#b54708}
-.p-notice{background:#e6f0fd;color:#175cd3}
-.p-ok{background:#e6f7ee;color:#067647}
-.p-draft{background:var(--pico-muted-border-color);color:var(--pico-muted-color)}
-@media(prefers-color-scheme:dark){
-  .p-critical{background:#3f1d1d;color:#fda4a4}
-  .p-warning{background:#3d2c12;color:#fcd34d}
-  .p-notice{background:#16304f;color:#93c5fd}
-  .p-ok{background:#0f3323;color:#6ee7b7}
-}
-.right{text-align:right}
-.muted{color:var(--pico-muted-color);font-size:12px}
-.err{background:#fde8e8;color:#b42318;padding:10px 14px;border-radius:8px;margin-bottom:14px;font-size:13px}
-.ok-msg{background:#e6f7ee;color:#067647;padding:10px 14px;border-radius:8px;margin-bottom:14px;font-size:13px}
-code{font-size:12px}
-dialog article{max-width:640px}
-textarea{font-family:ui-monospace,monospace;font-size:12px;min-height:220px}
-.inline{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px}
-.inline input,.inline select{margin:0;width:auto;min-width:170px;font-size:13px}
-.inline button{margin:0;width:auto;padding:7px 14px;font-size:13px}
-.bar{height:6px;border-radius:3px;background:var(--pico-muted-border-color);overflow:hidden}
-.bar>i{display:block;height:100%}
-.empty{text-align:center;padding:28px;color:var(--pico-muted-color);font-size:13px}
-</style>
+<title>控制台 — RankLoop</title>
+<style>${CONSOLE_STYLES}</style>
 </head>
 <body x-data="app()" x-init="boot()">
 
-<div class="topbar">
-  <a href="/" style="text-decoration:none;color:inherit"><strong>RankLoop</strong></a>
-  <span class="muted" x-text="rulesCount ? rulesCount + ' 条规则' : ''"></span>
-  <span style="flex:1"></span>
-  <template x-if="me">
-    <span class="muted" x-text="me.email"></span>
-  </template>
-  <template x-if="me">
-    <button @click="refresh()" class="secondary">刷新</button>
-  </template>
-  <template x-if="me">
-    <button @click="logout()" class="secondary">退出</button>
-  </template>
-</div>
-
-<main>
-  <template x-if="error"><div class="err" x-text="error"></div></template>
-  <template x-if="notice"><div class="ok-msg" x-text="notice"></div></template>
-
-  <template x-if="!me">
-    <article style="max-width:400px;margin:40px auto">
-      <h4>管理员登录</h4>
+<!-- 登录 -->
+<template x-if="!me">
+  <div class="login">
+    <div class="login-box">
+      <div class="brand">${LOGO} RankLoop</div>
+      <h2>登录</h2>
+      <p class="hint">管理内容质量与搜索表现</p>
+      <template x-if="error"><div class="banner err" x-text="error"></div></template>
       <label>邮箱
         <input type="email" x-model="form.email" @keydown.enter="submitAuth()"
                placeholder="you@example.com" autocomplete="email">
       </label>
       <label>密码
         <input type="password" x-model="form.password" @keydown.enter="submitAuth()"
-               placeholder="密码" autocomplete="current-password">
+               autocomplete="current-password">
       </label>
-      <button @click="submitAuth()">登录</button>
-      <p class="muted" style="text-align:center;margin:12px 0 0;font-size:12px">
-        客户无需登录——由管理员分配 API Key 后直接调用接口
-      </p>
-    </article>
-  </template>
+      <button class="btn pri" @click="submitAuth()">登录</button>
+      <p class="login-note">客户无需登录：由管理员分配密钥后直接调用接口</p>
+    </div>
+  </div>
+</template>
 
-  <template x-if="me">
-    <div>
-      <nav class="tabs">
-        <template x-for="t in tabs" :key="t.id">
-          <button @click="go(t.id)" :aria-current="tab===t.id?'page':false" x-text="t.label"></button>
-        </template>
-      </nav>
+<!-- 主界面 -->
+<template x-if="me">
+<div class="app">
+  <aside class="side">
+    <div class="brand">${LOGO} RankLoop</div>
+    ${navHtml}
+    <div class="side-foot">
+      <div x-text="me.email" style="margin-bottom:6px;word-break:break-all"></div>
+      <button @click="refresh()">刷新</button> ·
+      <button @click="logout()">退出</button>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <h1 x-text="pageTitle()"></h1>
+      <span class="sub" x-text="pageHint()"></span>
+    </div>
+
+    <div class="content">
+      <template x-if="error"><div class="banner err" x-text="error"></div></template>
+      <template x-if="notice"><div class="banner ok" x-text="notice"></div></template>
 
       <!-- 总览 -->
       <template x-if="tab==='overview'">
         <div>
-          <div class="cards">
-            <article><h4>平均健康分</h4>
-              <div class="big" :style="'color:'+scoreColor(stats.health?.average_score)"
-                   x-text="stats.health?.average_score ?? '暂无'"></div>
-              <div class="bar" style="margin-top:8px">
-                <i :style="'width:'+(stats.health?.average_score||0)+'%;background:'+scoreColor(stats.health?.average_score)"></i>
-              </div></article>
-            <article><h4>内容总数</h4><div class="big" x-text="stats.contents?.total ?? 0"></div>
-              <div class="muted" x-text="'已发布 '+(stats.contents?.published??0)+' · 草稿 '+(stats.contents?.draft??0)"></div></article>
-            <article><h4>可发布</h4><div class="big" style="color:#067647" x-text="stats.publishable ?? 0"></div>
-              <div class="muted">无 critical 问题</div></article>
-            <article><h4>被拦截</h4><div class="big" style="color:#b42318" x-text="stats.blocked ?? 0"></div>
-              <div class="muted">存在 critical 问题</div></article>
+          <div class="metrics">
+            <div class="metric"><div class="k">平均健康分</div>
+              <div class="v" :style="'color:'+scoreColor(stats.health?.average_score)"
+                   x-text="stats.health?.average_score ?? '—'"></div>
+              <div class="d" x-text="(stats.contents?.total ?? 0)+' 篇内容'"></div></div>
+            <div class="metric"><div class="k">可以发布</div>
+              <div class="v" style="color:var(--gain)" x-text="stats.publishable ?? 0"></div>
+              <div class="d">无阻断问题</div></div>
+            <div class="metric"><div class="k">发不出去</div>
+              <div class="v" :style="'color:'+(stats.blocked?'var(--blocked)':'var(--muted)')"
+                   x-text="stats.blocked ?? 0"></div>
+              <div class="d">存在严重问题</div></div>
+            <div class="metric"><div class="k">已发布</div>
+              <div class="v" x-text="stats.contents?.published ?? 0"></div>
+              <div class="d" x-text="(stats.sites ?? 0)+' 个站点'"></div></div>
           </div>
-          <article><h4>最常见问题</h4>
-            <template x-if="!stats.top_issues?.length"><div class="empty">暂无问题 🎉</div></template>
+
+          <div class="panel">
+            <div class="panel-head"><h2>最常出现的问题</h2>
+              <span class="sub" style="margin-left:auto;color:var(--muted);font-size:12px">
+                按出现次数排序</span></div>
+            <template x-if="!stats.top_issues?.length">
+              <div class="empty"><strong>没有待处理的问题</strong>所有内容都已通过检测</div>
+            </template>
             <template x-if="stats.top_issues?.length">
-              <table><thead><tr><th>规则</th><th>级别</th><th class="right">次数</th></tr></thead>
+              <table><thead><tr><th>规则</th><th>级别</th><th class="num">出现</th></tr></thead>
               <tbody><template x-for="i in stats.top_issues" :key="i.code">
                 <tr><td><code x-text="i.code"></code></td>
-                    <td><span class="pill" :class="'p-'+i.severity" x-text="i.severity"></span></td>
-                    <td class="right" x-text="i.count"></td></tr>
+                    <td><span class="tag" :class="tagClass(i.severity)" x-text="sevLabel(i.severity)"></span></td>
+                    <td class="num" x-text="i.count"></td></tr>
               </template></tbody></table>
             </template>
-          </article>
+          </div>
+        </div>
+      </template>
+
+      <!-- 内容：卡片网格 + 分数环 -->
+      <template x-if="tab==='contents'">
+        <div>
+          <div class="toolbar">
+            <select x-model="form.siteId" @change="loadContents()">
+              <option value="">选择站点…</option>
+              <template x-for="s in sites" :key="s.id">
+                <option :value="s.id" x-text="s.name"></option>
+              </template>
+            </select>
+            <span style="flex:1"></span>
+            <button class="btn pri" @click="openEditor()" :disabled="!form.siteId">推送内容</button>
+          </div>
+
+          <template x-if="!form.siteId">
+            <div class="panel"><div class="empty">
+              <strong>先选一个站点</strong>内容按站点归属，选定后可查看与推送</div></div>
+          </template>
+          <template x-if="form.siteId && !contents.length">
+            <div class="panel"><div class="empty">
+              <strong>这个站点还没有内容</strong>推送第一篇，看看它的健康分</div></div>
+          </template>
+
+          <template x-if="contents.length">
+            <div class="grid">
+              <template x-for="c in contents" :key="c.id">
+                <article class="card" :class="c.blocked ? 'is-blocked' : ''">
+                  <div class="card-top">
+                    <div class="card-id">
+                      <div class="path" x-text="c.path"></div>
+                      <div class="meta">
+                        <span class="tag" :class="c.status==='published'?'t-ok':'t-mute'"
+                              x-text="c.status==='published'?'已发布':'草稿'"></span>
+                        <span x-text="' · '+c.format"></span>
+                      </div>
+                    </div>
+                    <div>
+                      <div class="ring" x-html="scoreRing(c.score)"></div>
+                    </div>
+                  </div>
+                  <div class="card-acts">
+                    <button class="btn sm" @click="inspect(c.id)">优化建议</button>
+                    <button class="btn sm" @click="loadVersions(c.id)">版本</button>
+                    <button class="btn sm pri" @click="publish(c.id)"
+                            x-show="c.status!=='published' && !c.blocked">发布</button>
+                    <span class="tag t-blocked" x-show="c.blocked"
+                          x-text="c.blocking_count+' 项待修复'"></span>
+                  </div>
+                </article>
+              </template>
+            </div>
+          </template>
         </div>
       </template>
 
       <!-- 站点 -->
       <template x-if="tab==='sites'">
         <div>
-          <div class="inline">
+          <div class="toolbar">
             <input placeholder="站点名称" x-model="form.siteName">
             <input placeholder="https://example.com" x-model="form.siteOrigin">
-            <button @click="createSite()">添加站点</button>
+            <button class="btn pri" @click="createSite()">添加站点</button>
           </div>
-          <article>
-            <template x-if="!sites.length"><div class="empty">还没有站点</div></template>
-            <template x-if="sites.length">
-              <table><thead><tr><th>名称</th><th>访问地址</th><th>自有域名</th>
-                <th class="right">内容</th><th></th></tr></thead>
-              <tbody><template x-for="s in sites" :key="s.id">
-                <tr><td x-text="s.name"></td>
-                    <td><a :href="s.live_url" target="_blank" rel="noopener"><code x-text="s.live_url"></code></a></td>
-                    <td><template x-if="s.domain">
-                          <span class="pill" :class="s.domain_verified?'p-ok':'p-warning'"
-                            x-text="s.domain + (s.domain_verified?'':'（待验证）')"></span>
-                        </template>
-                        <template x-if="!s.domain"><span class="muted">未绑定</span></template></td>
-                    <td class="right" x-text="s.content_count"></td>
-                    <td class="right">
-                      <button @click="pickSite(s)" style="width:auto;padding:4px 10px;font-size:12px">内容</button>
-                      <button @click="openDomain(s)" style="width:auto;padding:4px 10px;font-size:12px" class="secondary">域名</button>
-                    </td></tr>
-              </template></tbody></table>
-            </template>
-          </article>
-        </div>
-      </template>
-
-      <!-- 内容 -->
-      <template x-if="tab==='contents'">
-        <div>
-          <div class="inline">
-            <select x-model="form.siteId" @change="loadContents()">
-              <option value="">选择站点…</option>
+          <template x-if="!sites.length">
+            <div class="panel"><div class="empty">
+              <strong>还没有站点</strong>站点决定内容的对外地址</div></div>
+          </template>
+          <template x-if="sites.length">
+            <div class="grid">
               <template x-for="s in sites" :key="s.id">
-                <option :value="s.id" x-text="s.name+' ('+s.origin+')'"></option>
+                <article class="card">
+                  <div class="card-top"><div class="card-id">
+                    <div class="path" style="font-family:var(--sans);font-size:15px"
+                         x-text="s.name"></div>
+                    <div class="meta"><a :href="s.live_url" target="_blank" rel="noopener"
+                         x-text="s.live_url"></a></div>
+                  </div></div>
+                  <div class="meta" style="font-size:12.5px;color:var(--muted)">
+                    <template x-if="s.domain">
+                      <span class="tag" :class="s.domain_verified?'t-ok':'t-warn'"
+                            x-text="s.domain + (s.domain_verified?' 已生效':' 待验证')"></span>
+                    </template>
+                    <template x-if="!s.domain"><span>使用平台子域名</span></template>
+                    <span x-text="' · '+s.content_count+' 篇内容'"></span>
+                  </div>
+                  <div class="card-acts">
+                    <button class="btn sm" @click="pickSite(s)">查看内容</button>
+                    <button class="btn sm" @click="openDomain(s)">自有域名</button>
+                  </div>
+                </article>
               </template>
-            </select>
-            <button @click="openEditor()" :disabled="!form.siteId">提交内容</button>
-          </div>
-          <article>
-            <template x-if="!form.siteId"><div class="empty">请先选择站点</div></template>
-            <template x-if="form.siteId && !contents.length"><div class="empty">该站点还没有内容</div></template>
-            <template x-if="contents.length">
-              <table><thead><tr><th>路径</th><th>格式</th><th>状态</th>
-                <th class="right">健康分</th><th></th></tr></thead>
-              <tbody><template x-for="c in contents" :key="c.id">
-                <tr><td><code x-text="c.path"></code></td>
-                    <td x-text="c.format"></td>
-                    <td><span class="pill" :class="c.status==='published'?'p-ok':'p-draft'" x-text="c.status"></span></td>
-                    <td class="right" :style="'color:'+scoreColor(c.score)" x-text="c.score ?? '—'"></td>
-                    <td class="right">
-                      <button @click="inspect(c.id)" style="width:auto;padding:4px 10px;font-size:12px">优化建议</button>
-                      <button @click="loadVersions(c.id)" style="width:auto;padding:4px 10px;font-size:12px" class="secondary">版本</button>
-                      <button @click="publish(c.id)" x-show="c.status!=='published'"
-                              style="width:auto;padding:4px 10px;font-size:12px">发布</button>
-                    </td></tr>
-              </template></tbody></table>
-            </template>
-          </article>
+            </div>
+          </template>
         </div>
       </template>
 
       <!-- 搜索表现 -->
       <template x-if="tab==='search'">
         <div>
-          <div class="inline">
+          <div class="toolbar">
             <select x-model="form.siteId" @change="loadSearch()">
-              <option value="">选择站点…</option>
+              <option value="">选择站点</option>
               <template x-for="s in sites" :key="s.id">
                 <option :value="s.id" x-text="s.name"></option>
               </template>
@@ -237,270 +252,302 @@ textarea{font-family:ui-monospace,monospace;font-size:12px;min-height:220px}
               <option value="28">近 28 天</option>
               <option value="90">近 90 天</option>
             </select>
-            <button @click="syncSearch()" :disabled="!form.siteId || syncing"
-                    x-text="syncing ? '同步中…' : '从 Search Console 同步'"></button>
+            <span style="flex:1"></span>
+            <button class="btn" @click="syncSearch()" :disabled="!form.siteId || syncing"
+                    x-text="syncing ? '同步中' : '同步数据'"></button>
           </div>
 
-          <template x-if="!form.siteId"><div class="empty">请先选择站点</div></template>
+          <template x-if="!form.siteId">
+            <div class="panel"><div class="empty">
+              <strong>先选一个站点</strong>搜索数据按站点分别统计</div></div>
+          </template>
 
           <template x-if="form.siteId && perf">
             <div>
-              <div class="cards">
-                <article><h4>点击</h4>
-                  <div class="big" x-text="perf.clicks"></div>
-                  <div class="muted" x-show="perf.change?.clicks_pct !== null"
-                       :style="'color:'+(perf.change?.clicks>=0?'#067647':'#b42318')"
-                       x-text="(perf.change?.clicks>=0?'▲ +':'▼ ')+perf.change?.clicks+' ('+perf.change?.clicks_pct+'%)'"></div>
-                </article>
-                <article><h4>曝光</h4><div class="big" x-text="perf.impressions"></div></article>
-                <article><h4>点击率</h4>
-                  <div class="big" x-text="(perf.ctr*100).toFixed(2)+'%'"></div></article>
-                <article><h4>平均排名</h4>
-                  <div class="big" :style="'color:'+posColor(perf.position)"
-                       x-text="perf.position || '—'"></div></article>
+              <div class="metrics">
+                <div class="metric"><div class="k">点击</div>
+                  <div class="v" x-text="perf.clicks"></div>
+                  <div class="d" x-show="perf.change?.clicks_pct !== null"
+                       :style="'color:'+(perf.change?.clicks>=0?'var(--gain)':'var(--blocked)')"
+                       x-text="(perf.change?.clicks>=0?'↑ ':'↓ ')+Math.abs(perf.change?.clicks)+' ('+perf.change?.clicks_pct+'%)'"></div>
+                </div>
+                <div class="metric"><div class="k">曝光</div>
+                  <div class="v" x-text="perf.impressions"></div></div>
+                <div class="metric"><div class="k">点击率</div>
+                  <div class="v" x-text="(perf.ctr*100).toFixed(2)+'%'"></div></div>
+                <div class="metric"><div class="k">平均排名</div>
+                  <div class="v" :style="'color:'+posColor(perf.position)"
+                       x-text="perf.position || '—'"></div>
+                  <div class="d" x-show="perf.position" x-text="rankHint(perf.position)"></div></div>
               </div>
 
               <template x-if="perf.note">
-                <article style="margin-bottom:14px">
-                  <p class="muted" style="margin:0" x-text="perf.note"></p>
-                  <p class="muted" style="margin:6px 0 0;font-size:11px"
-                     x-show="perf.last_sync"
-                     x-text="'最近同步：'+(perf.last_sync?.status)+' · '+(perf.last_sync?.rows)+' 行'"></p>
-                </article>
+                <div class="banner" style="background:var(--paper);color:var(--muted)">
+                  <span x-text="perf.note"></span>
+                  <span x-show="perf.last_sync"
+                        x-text="' 最近同步：'+(perf.last_sync?.rows)+' 行'"></span>
+                </div>
               </template>
 
-              <article style="margin-bottom:14px"><h4>趋势</h4>
-                <template x-if="!trend.length"><div class="empty">暂无数据</div></template>
-                <div x-show="trend.length" x-html="trendChart()"></div>
-              </article>
+              <div class="panel" style="margin-bottom:14px">
+                <div class="panel-head"><h2>点击趋势</h2></div>
+                <div class="panel-body">
+                  <template x-if="!trend.length"><div class="empty">暂无数据</div></template>
+                  <div x-show="trend.length" x-html="trendChart()"></div>
+                </div>
+              </div>
 
-              <article><h4>关键词排行</h4>
-                <template x-if="!keywords.length"><div class="empty">暂无关键词数据</div></template>
+              <div class="panel">
+                <div class="panel-head"><h2>关键词</h2>
+                  <span style="margin-left:auto;color:var(--muted);font-size:12px">按点击排序</span></div>
+                <template x-if="!keywords.length">
+                  <div class="empty"><strong>还没有关键词数据</strong>
+                    内容被收录并产生展现后，这里会显示带来流量的词</div>
+                </template>
                 <template x-if="keywords.length">
-                  <table><thead><tr><th>关键词</th><th class="right">点击</th>
-                    <th class="right">曝光</th><th class="right">CTR</th>
-                    <th class="right">排名</th></tr></thead>
+                  <table><thead><tr><th>关键词</th><th class="num">点击</th>
+                    <th class="num">曝光</th><th class="num">点击率</th>
+                    <th class="num">排名</th></tr></thead>
                   <tbody><template x-for="k in keywords" :key="k.query">
                     <tr><td x-text="k.query"></td>
-                        <td class="right" x-text="k.clicks"></td>
-                        <td class="right" x-text="k.impressions"></td>
-                        <td class="right" x-text="(k.ctr*100).toFixed(1)+'%'"></td>
-                        <td class="right" :style="'color:'+posColor(k.position)"
+                        <td class="num" x-text="k.clicks"></td>
+                        <td class="num" x-text="k.impressions"></td>
+                        <td class="num" x-text="(k.ctr*100).toFixed(1)+'%'"></td>
+                        <td class="num" :style="'color:'+posColor(k.position)"
                             x-text="k.position"></td></tr>
                   </template></tbody></table>
                 </template>
-              </article>
+              </div>
             </div>
           </template>
         </div>
       </template>
 
-      <!-- 审计日志 -->
+      <!-- 操作记录 -->
       <template x-if="tab==='audit'">
-        <article>
-          <h4>操作记录</h4>
-          <template x-if="!auditRows.length"><div class="empty">暂无记录</div></template>
+        <div class="panel">
+          <div class="panel-head"><h2>操作记录</h2>
+            <span style="margin-left:auto;color:var(--muted);font-size:12px">最近 100 条</span></div>
+          <template x-if="!auditRows.length">
+            <div class="empty"><strong>还没有记录</strong>内容的创建与发布会记录在这里</div>
+          </template>
           <template x-if="auditRows.length">
-            <table><thead><tr><th>时间</th><th>操作</th><th>对象</th>
-              <th>执行者</th></tr></thead>
+            <table><thead><tr><th>时间</th><th>操作</th><th>对象</th><th>执行者</th></tr></thead>
             <tbody><template x-for="a in auditRows" :key="a.id">
-              <tr><td class="muted" x-text="new Date(a.at).toLocaleString('zh-CN')"></td>
-                  <td><code x-text="a.action"></code></td>
-                  <td class="muted" x-text="(a.metadata?.path) || a.resource_id || a.resource"></td>
-                  <td class="muted" x-text="a.actor"></td></tr>
+              <tr><td style="color:var(--muted);white-space:nowrap"
+                      x-text="new Date(a.at).toLocaleString('zh-CN')"></td>
+                  <td x-text="actionLabel(a.action)"></td>
+                  <td><code x-text="(a.metadata?.path) || a.resource"></code></td>
+                  <td style="color:var(--muted)" x-text="a.actor"></td></tr>
             </template></tbody></table>
           </template>
-        </article>
+        </div>
       </template>
 
-      <!-- 租户（仅管理员） -->
+      <!-- 密钥 -->
+      <template x-if="tab==='keys'">
+        <div>
+          <div class="toolbar">
+            <input placeholder="密钥名称" x-model="form.keyName">
+            <button class="btn pri" @click="createKey()">创建密钥</button>
+          </div>
+          <template x-if="newKey">
+            <div class="banner ok">新密钥（仅显示一次）：<code x-text="newKey"></code></div>
+          </template>
+          <div class="panel">
+            <template x-if="!keys.length">
+              <div class="empty"><strong>还没有密钥</strong>密钥用于第三方系统推送内容</div>
+            </template>
+            <template x-if="keys.length">
+              <table><thead><tr><th>名称</th><th>前缀</th><th>最近使用</th><th></th></tr></thead>
+              <tbody><template x-for="k in keys" :key="k.id">
+                <tr><td x-text="k.name"></td>
+                    <td><code x-text="k.prefix+'…'"></code></td>
+                    <td style="color:var(--muted)"
+                        x-text="k.last_used_at ? new Date(k.last_used_at).toLocaleString('zh-CN') : '从未'"></td>
+                    <td style="text-align:right"><button class="btn sm danger"
+                        @click="revokeKey(k.id)">吊销</button></td></tr>
+              </template></tbody></table>
+            </template>
+          </div>
+        </div>
+      </template>
+
+      <!-- 租户 -->
       <template x-if="tab==='tenants'">
         <div>
           <template x-if="!me?.is_platform_admin">
-            <div class="empty">需要平台管理员权限</div>
+            <div class="panel"><div class="empty">
+              <strong>需要平台管理员权限</strong>当前账号无法管理租户</div></div>
           </template>
           <template x-if="me?.is_platform_admin">
             <div>
-              <div class="inline">
+              <div class="toolbar">
                 <input placeholder="租户名称" x-model="form.tenantName">
-                <input placeholder="slug（可选）" x-model="form.tenantSlug">
-                <button @click="createTenant()">创建租户并签发 Key</button>
+                <input placeholder="标识（可选）" x-model="form.tenantSlug">
+                <button class="btn pri" @click="createTenant()">创建并签发密钥</button>
               </div>
               <template x-if="newKey">
-                <div class="ok-msg">
-                  新 API Key（仅显示一次，请转交客户）：<code x-text="newKey"></code>
+                <div class="banner ok">密钥（仅显示一次，请转交客户）：<code x-text="newKey"></code></div>
+              </template>
+              <template x-if="!tenants.length">
+                <div class="panel"><div class="empty">
+                  <strong>还没有租户</strong>创建租户后把密钥交给客户，他们即可推送内容</div></div>
+              </template>
+              <template x-if="tenants.length">
+                <div class="grid">
+                  <template x-for="t in tenants" :key="t.id">
+                    <article class="card">
+                      <div class="card-top"><div class="card-id">
+                        <div class="path" style="font-family:var(--sans);font-size:15px"
+                             x-text="t.name"></div>
+                        <div class="meta"><code x-text="t.slug"></code></div>
+                      </div></div>
+                      <div style="display:flex;gap:16px;font-size:12.5px;color:var(--muted)">
+                        <span><b class="num" style="color:var(--text)" x-text="t.site_count"></b> 站点</span>
+                        <span><b class="num" style="color:var(--text)" x-text="t.content_count"></b> 内容</span>
+                        <span><b class="num" style="color:var(--gain)" x-text="t.published_count"></b> 已发布</span>
+                      </div>
+                      <div class="card-acts">
+                        <button class="btn sm" @click="issueKey(t)">补发密钥</button>
+                      </div>
+                    </article>
+                  </template>
                 </div>
               </template>
-              <article>
-                <template x-if="!tenants.length"><div class="empty">还没有租户</div></template>
-                <template x-if="tenants.length">
-                  <table><thead><tr><th>租户</th><th>slug</th><th class="right">站点</th>
-                    <th class="right">内容</th><th class="right">已发布</th><th></th></tr></thead>
-                  <tbody><template x-for="t in tenants" :key="t.id">
-                    <tr><td x-text="t.name"></td>
-                        <td><code x-text="t.slug"></code></td>
-                        <td class="right" x-text="t.site_count"></td>
-                        <td class="right" x-text="t.content_count"></td>
-                        <td class="right" x-text="t.published_count"></td>
-                        <td class="right"><button @click="issueKey(t)"
-                              style="width:auto;padding:4px 10px;font-size:12px" class="secondary">补发 Key</button></td></tr>
-                  </template></tbody></table>
-                </template>
-              </article>
             </div>
           </template>
         </div>
       </template>
 
-      <!-- API Key -->
-      <template x-if="tab==='keys'">
-        <div>
-          <div class="inline">
-            <input placeholder="Key 名称" x-model="form.keyName">
-            <button @click="createKey()">创建（全部权限）</button>
-          </div>
-          <template x-if="newKey">
-            <div class="ok-msg">新 Key（仅显示一次）：<code x-text="newKey"></code></div>
-          </template>
-          <article>
-            <table><thead><tr><th>名称</th><th>前缀</th><th>最近使用</th><th></th></tr></thead>
-            <tbody><template x-for="k in keys" :key="k.id">
-              <tr><td x-text="k.name"></td><td><code x-text="k.prefix+'…'"></code></td>
-                  <td class="muted" x-text="k.last_used_at ? new Date(k.last_used_at).toLocaleString('zh-CN') : '从未'"></td>
-                  <td class="right"><button @click="revokeKey(k.id)"
-                        style="width:auto;padding:4px 10px;font-size:12px" class="secondary">吊销</button></td></tr>
-            </template></tbody></table>
-          </article>
-        </div>
-      </template>
     </div>
-  </template>
-</main>
+  </div>
+</div>
+</template>
 
-<!-- 提交内容 -->
-<dialog :open="editorOpen">
-  <article>
-    <header><strong>提交内容</strong></header>
-    <label>路径 <input x-model="form.path" placeholder="/my-article"></label>
+<!-- 优化建议 -->
+<dialog x-ref="detailOpen" x-effect="detailOpen ? $refs.detailOpen.showModal() : $refs.detailOpen.close()" @close="detailOpen=false">
+  <div class="dlg-head">
+    <h3 x-text="detail?.path"></h3>
+    <span style="color:var(--muted);font-size:12.5px" x-text="'v'+(detail?.version??'')"></span>
+  </div>
+  <div class="dlg-body">
+    <template x-if="impact">
+      <div class="metrics" style="grid-template-columns:repeat(auto-fit,minmax(120px,1fr))">
+        <div class="metric"><div class="k">现在</div>
+          <div class="v" :style="'color:'+scoreColor(impact.current)" x-text="impact.current"></div></div>
+        <div class="metric"><div class="k">先做快的</div>
+          <div class="v" style="color:var(--accent)" x-text="impact.quickWin"></div>
+          <div class="d" x-text="impact.quickMinutes+' 分钟'"></div></div>
+        <div class="metric"><div class="k">全部修完</div>
+          <div class="v" style="color:var(--gain)" x-text="impact.potential"></div>
+          <div class="d" x-text="impact.totalMinutes+' 分钟'"></div></div>
+        <div class="metric"><div class="k">阻断发布</div>
+          <div class="v" :style="'color:'+(impact.blockingCount?'var(--blocked)':'var(--gain)')"
+               x-text="impact.blockingCount"></div></div>
+      </div>
+    </template>
+
+    <template x-if="!recs.length">
+      <div class="empty"><strong>没有待优化项</strong>这篇内容已通过全部检测</div>
+    </template>
+    <template x-if="recs.length">
+      <div>
+        <template x-for="(r,idx) in recs" :key="r.code">
+          <div class="rec">
+            <div class="rec-n" x-text="idx+1"></div>
+            <div>
+              <div class="rec-title">
+                <strong x-text="r.message"></strong>
+                <span class="tag t-blocked" x-show="r.blocking">发不出去</span>
+              </div>
+              <div class="rec-ev" x-text="r.evidence"></div>
+              <div class="rec-fix" x-text="r.recommendation"></div>
+            </div>
+            <div class="rec-cost">
+              <div class="g" x-text="'+'+r.gain"></div>
+              <div class="m" x-text="r.minutes+' 分钟'"></div>
+            </div>
+          </div>
+        </template>
+      </div>
+    </template>
+  </div>
+  <div class="dlg-foot"><button class="btn" @click="detailOpen=false">关闭</button></div>
+</dialog>
+
+<!-- 推送内容 -->
+<dialog x-ref="editorOpen" x-effect="editorOpen ? $refs.editorOpen.showModal() : $refs.editorOpen.close()" @close="editorOpen=false">
+  <div class="dlg-head"><h3>推送内容</h3></div>
+  <div class="dlg-body">
+    <label>路径<input x-model="form.path" placeholder="/my-article"></label>
     <label>格式
       <select x-model="form.format">
         <option value="markdown">Markdown（frontmatter 提供元数据）</option>
         <option value="html">HTML</option>
       </select>
     </label>
-    <label>正文 <textarea x-model="form.body" placeholder="---&#10;title: 标题&#10;---&#10;&#10;# 正文"></textarea></label>
-    <footer>
-      <button class="secondary" @click="editorOpen=false" style="width:auto">取消</button>
-      <button @click="submitContent()" style="width:auto">提交并检测</button>
-    </footer>
-  </article>
+    <label>正文<textarea x-model="form.body"
+      placeholder="---&#10;title: 标题&#10;description: 描述&#10;---&#10;&#10;# 正文"></textarea></label>
+  </div>
+  <div class="dlg-foot">
+    <button class="btn" @click="editorOpen=false">取消</button>
+    <button class="btn pri" @click="submitContent()">推送并检测</button>
+  </div>
 </dialog>
 
-<!-- 优化建议（按性价比排序） -->
-<dialog :open="detailOpen">
-  <article style="max-width:760px">
-    <header><strong x-text="detail?.path"></strong>
-      <span class="muted" x-text="' · v'+(detail?.version??'')"></span></header>
-
-    <template x-if="impact">
-      <div class="cards" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr))">
-        <article><h4>当前</h4>
-          <div class="big" :style="'color:'+scoreColor(impact.current)" x-text="impact.current"></div></article>
-        <article><h4>全部修完</h4>
-          <div class="big" style="color:#067647" x-text="impact.potential"></div>
-          <div class="muted" x-text="'约 '+impact.totalMinutes+' 分钟'"></div></article>
-        <article><h4>先做快的</h4>
-          <div class="big" style="color:#175cd3" x-text="impact.quickWin"></div>
-          <div class="muted" x-text="'仅需 '+impact.quickMinutes+' 分钟'"></div></article>
-        <article><h4>阻断发布</h4>
-          <div class="big" :style="'color:'+(impact.blockingCount?'#b42318':'#067647')"
-               x-text="impact.blockingCount"></div></article>
-      </div>
-    </template>
-
-    <template x-if="!recs.length"><div class="empty">无待优化项 🎉</div></template>
-    <template x-if="recs.length">
-      <table><thead><tr><th>优先做</th><th class="right">+分</th>
-        <th class="right">耗时</th><th>问题与建议</th></tr></thead>
-      <tbody><template x-for="(r,idx) in recs" :key="r.code">
-        <tr>
-          <td style="white-space:nowrap">
-            <strong x-text="(idx+1)+'.'"></strong>
-            <span class="pill" :class="'p-'+r.severity" x-text="r.code"></span>
-            <span class="pill p-critical" x-show="r.blocking">阻断</span>
-          </td>
-          <td class="right" style="color:#067647;font-weight:600" x-text="'+'+r.gain"></td>
-          <td class="right muted" x-text="r.minutes+' 分'"></td>
-          <td>
-            <div x-text="r.message"></div>
-            <div class="muted" style="margin-top:3px" x-text="r.evidence"></div>
-            <div style="margin-top:4px;font-size:12px;color:var(--pico-primary)"
-                 x-text="'→ '+r.recommendation"></div>
-          </td>
-        </tr>
-      </template></tbody></table>
-    </template>
-
-    <footer><button @click="detailOpen=false" style="width:auto">关闭</button></footer>
-  </article>
-</dialog>
-
-<!-- 域名管理 -->
-<dialog :open="domainOpen">
-  <article>
-    <header><strong>自有域名</strong>
-      <span class="muted" x-text="domainSite?.name"></span></header>
-    <p class="muted">
-      绑定自有域名后，内容以该域名对外渲染，SEO 权重归属客户自己的域名——
-      这是平台子域名做不到的。
+<!-- 自有域名 -->
+<dialog x-ref="domainOpen" x-effect="domainOpen ? $refs.domainOpen.showModal() : $refs.domainOpen.close()" @close="domainOpen=false">
+  <div class="dlg-head"><h3>自有域名</h3>
+    <span style="color:var(--muted);font-size:12.5px" x-text="domainSite?.name"></span></div>
+  <div class="dlg-body">
+    <p style="color:var(--muted);font-size:13px;margin:0 0 16px">
+      绑定后内容以该域名对外渲染，搜索权重归属客户自己的域名。
     </p>
-    <label>域名
-      <input x-model="form.domain" placeholder="blog.example.com">
-    </label>
+    <label>域名<input x-model="form.domain" placeholder="blog.example.com"></label>
     <template x-if="domainInfo">
-      <div class="ok-msg">
-        <strong>请配置 DNS：</strong>
+      <div class="banner ok">
+        <strong>配置 DNS：</strong>
         <ol style="margin:8px 0 0;padding-left:20px">
           <li x-text="domainInfo.instructions.step1"></li>
           <li x-text="domainInfo.instructions.step2"></li>
         </ol>
       </div>
     </template>
-    <footer>
-      <button class="secondary" @click="domainOpen=false" style="width:auto">关闭</button>
-      <button @click="unbindDomain()" class="secondary" style="width:auto"
-              x-show="domainSite?.domain">解绑</button>
-      <button @click="bindDomain()" style="width:auto">绑定</button>
-      <button @click="verifyDomain()" style="width:auto" x-show="domainSite?.domain || domainInfo">验证</button>
-    </footer>
-  </article>
+  </div>
+  <div class="dlg-foot">
+    <button class="btn" @click="domainOpen=false">关闭</button>
+    <button class="btn danger" @click="unbindDomain()" x-show="domainSite?.domain">解绑</button>
+    <button class="btn" @click="bindDomain()">绑定</button>
+    <button class="btn pri" @click="verifyDomain()"
+            x-show="domainSite?.domain || domainInfo">验证</button>
+  </div>
 </dialog>
 
 <!-- 版本历史 -->
-<dialog :open="versionsOpen">
-  <article>
-    <header><strong>版本历史</strong>
-      <span class="muted">分数变化可追溯</span></header>
+<dialog x-ref="versionsOpen" x-effect="versionsOpen ? $refs.versionsOpen.showModal() : $refs.versionsOpen.close()" @close="versionsOpen=false">
+  <div class="dlg-head"><h3>版本历史</h3></div>
+  <div class="dlg-body">
     <template x-if="!versions.length"><div class="empty">暂无版本</div></template>
     <template x-if="versions.length">
-      <table><thead><tr><th>版本</th><th class="right">健康分</th>
+      <table><thead><tr><th>版本</th><th class="num">健康分</th>
         <th>问题</th><th>时间</th></tr></thead>
       <tbody><template x-for="v in versions" :key="v.id">
         <tr><td><span x-text="'v'+v.version"></span>
-                <span class="pill p-ok" x-show="v.is_current">当前</span></td>
-            <td class="right" :style="'color:'+scoreColor(v.score)" x-text="v.score ?? '—'"></td>
-            <td><template x-if="v.counts">
-                  <span>
-                    <span class="pill p-critical" x-show="v.counts.critical" x-text="v.counts.critical"></span>
-                    <span class="pill p-warning" x-show="v.counts.warning" x-text="v.counts.warning"></span>
-                    <span class="pill p-notice" x-show="v.counts.notice" x-text="v.counts.notice"></span>
-                  </span>
-                </template></td>
-            <td class="muted" x-text="new Date(v.created_at).toLocaleString('zh-CN')"></td></tr>
+                <span class="tag t-ok" x-show="v.is_current" style="margin-left:6px">当前</span></td>
+            <td class="num" :style="'color:'+scoreColor(v.score)" x-text="v.score ?? '—'"></td>
+            <td><template x-if="v.counts"><span>
+                  <span class="tag t-blocked" x-show="v.counts.critical"
+                        x-text="v.counts.critical+' 严重'"></span>
+                  <span class="tag t-warn" x-show="v.counts.warning"
+                        x-text="v.counts.warning+' 警告'"></span>
+                </span></template></td>
+            <td style="color:var(--muted)"
+                x-text="new Date(v.created_at).toLocaleString('zh-CN')"></td></tr>
       </template></tbody></table>
     </template>
-    <footer><button @click="versionsOpen=false" style="width:auto">关闭</button></footer>
-  </article>
+  </div>
+  <div class="dlg-foot"><button class="btn" @click="versionsOpen=false">关闭</button></div>
 </dialog>
 
 <script src="/assets/alpine.js" defer></script>
@@ -542,8 +589,8 @@ function app() {
     },
 
     scoreColor(s) {
-      if (s === null || s === undefined) return 'var(--pico-muted-color)'
-      return s >= 80 ? '#067647' : s >= 60 ? '#b54708' : '#b42318'
+      if (s === null || s === undefined) return 'var(--muted)'
+      return s >= 80 ? 'var(--gain)' : s >= 60 ? 'var(--warn)' : 'var(--blocked)'
     },
 
     flash(msg) { this.notice = msg; setTimeout(() => { this.notice = '' }, 4000) },
@@ -707,10 +754,59 @@ function app() {
       } catch (e) { this.error = e.message }
     },
 
+
+    // ── 视图辅助 ──
+    pageTitle() {
+      return ({ overview: '总览', contents: '内容', sites: '站点', search: '搜索表现',
+                audit: '操作记录', keys: '密钥', tenants: '租户' })[this.tab] ?? ''
+    },
+    pageHint() {
+      return ({
+        overview: '内容质量与发布状态一览',
+        contents: '推送内容、查看优化建议、发布上线',
+        sites: '站点与对外域名',
+        search: '内容发布后的真实搜索表现',
+        audit: '谁在什么时候改了什么',
+        keys: '第三方系统凭密钥推送内容',
+        tenants: '创建租户并分配密钥',
+      })[this.tab] ?? ''
+    },
+    sevLabel(s) { return ({ critical: '严重', warning: '警告', notice: '建议' })[s] ?? s },
+    tagClass(s) { return ({ critical: 't-blocked', warning: 't-warn', notice: 't-mute' })[s] ?? 't-mute' },
+    actionLabel(a) {
+      return ({
+        'content.created': '推送内容', 'content.updated': '更新内容',
+        'content.published': '发布内容', 'site.created': '创建站点',
+        'site.domain_bound': '绑定域名', 'tenant.created': '创建租户',
+      })[a] ?? a
+    },
+    rankHint(p) {
+      if (!p) return ''
+      return p <= 10 ? '首页区间' : p <= 20 ? '第二页' : p <= 30 ? '第三页' : '较靠后'
+    },
+
+    /**
+     * 分数环：外圈浅色标出「修完能到哪」，一眼看到差距，
+     * 不用读两个数字自己相减。
+     */
+    scoreRing(score) {
+      if (score === null || score === undefined) {
+        return '<div class="ring"><div class="num" style="color:var(--faint)">—</div></div>'
+      }
+      const r = 24, c = 2 * Math.PI * r
+      const done = (score / 100) * c
+      const color = this.scoreColor(score)
+      return '<svg width="58" height="58" viewBox="0 0 58 58">' +
+        '<circle cx="29" cy="29" r="' + r + '" fill="none" stroke="var(--line)" stroke-width="5"/>' +
+        '<circle cx="29" cy="29" r="' + r + '" fill="none" stroke="' + color + '" stroke-width="5" ' +
+        'stroke-linecap="round" stroke-dasharray="' + done.toFixed(1) + ' ' + c.toFixed(1) + '"/>' +
+        '</svg><div class="num" style="color:' + color + '">' + score + '</div>'
+    },
+
     // 排名越小越好：1-10 在首页，10-30 第二三页，之后基本无流量
     posColor(p) {
-      if (!p) return 'var(--pico-muted-color)'
-      return p <= 10 ? '#067647' : p <= 30 ? '#b54708' : '#b42318'
+      if (!p) return 'var(--muted)'
+      return p <= 10 ? 'var(--gain)' : p <= 30 ? 'var(--warn)' : 'var(--blocked)'
     },
 
     async loadAudit() {
@@ -757,15 +853,15 @@ function app() {
       const area = line + ' L' + xs(d.length - 1).toFixed(1) + ' ' + (h - pad) + ' L' + pad + ' ' + (h - pad) + ' Z'
       const dots = d.map((x, i) =>
         '<circle cx="' + xs(i).toFixed(1) + '" cy="' + ys(x.clicks).toFixed(1) +
-        '" r="2.5" fill="var(--pico-primary)"><title>' + x.date + '：' + x.clicks +
+        '" r="2.5" fill="var(--accent)"><title>' + x.date + '：' + x.clicks +
         ' 次点击 · ' + x.impressions + ' 次曝光</title></circle>').join('')
       return '<svg viewBox="0 0 ' + w + ' ' + h + '" style="width:100%;height:160px" ' +
         'role="img" aria-label="点击趋势折线图">' +
         '<line x1="' + pad + '" y1="' + (h - pad) + '" x2="' + (w - pad) + '" y2="' + (h - pad) +
-        '" stroke="var(--pico-muted-border-color)"/>' +
-        '<text x="4" y="' + (pad + 4) + '" fill="var(--pico-muted-color)" font-size="10">' + max + '</text>' +
-        '<path d="' + area + '" fill="var(--pico-primary)" opacity=".1"/>' +
-        '<path d="' + line + '" fill="none" stroke="var(--pico-primary)" stroke-width="2"/>' +
+        '" stroke="var(--line)"/>' +
+        '<text x="4" y="' + (pad + 4) + '" fill="var(--muted)" font-size="10">' + max + '</text>' +
+        '<path d="' + area + '" fill="var(--accent)" opacity=".1"/>' +
+        '<path d="' + line + '" fill="none" stroke="var(--accent)" stroke-width="2"/>' +
         dots + '</svg>'
     },
 

@@ -29,7 +29,11 @@ export async function contentDetailRoutes(
     async (req, reply) => {
       const { workspaceId } = req.auth!
       const content = await prisma.content.findFirst({
-        where: { id: req.params.contentId, site: { workspaceId } },
+        where: {
+          id: req.params.contentId,
+          // 平台管理员跨租户查看
+          ...(req.user?.isPlatformAdmin ? {} : { site: { workspaceId } }),
+        },
         include: {
           currentVersion: { include: { checks: { take: 1, orderBy: { createdAt: 'desc' } } } },
         },
@@ -77,7 +81,10 @@ export async function contentDetailRoutes(
     async (req, reply) => {
       const { workspaceId } = req.auth!
       const content = await prisma.content.findFirst({
-        where: { id: req.params.contentId, site: { workspaceId } },
+        where: {
+          id: req.params.contentId,
+          ...(req.user?.isPlatformAdmin ? {} : { site: { workspaceId } }),
+        },
         select: { id: true, path: true, currentVersionId: true },
       })
       if (!content) throw new ApiError(404, 'NOT_FOUND', '内容不存在', {})
