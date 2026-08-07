@@ -48,6 +48,8 @@ Thumbs.db
 # 静态站构建产物
 /dist-site
 
-# 截图产物
+# 截图产物（调试时随手保存的，不入库）
 *.png
+# 产品资产必须入库：漏了它们，部署出去的页面图片全 404
 !docs/images/*.png
+!apps/api/public/img/*.png
