@@ -167,6 +167,9 @@ model Content {
   status      ContentStatus @default(draft)
   // 当前生效版本
   currentVersionId String?  @unique @map("current_version_id") @db.Uuid
+  // 线上实际生效的版本。与 currentVersionId 不同时说明有修订待发布——
+  // 少了它就无法判断「修订后能否再次发布」，修复版本会永远上不了线。
+  publishedVersionId String? @map("published_version_id") @db.Uuid
   publishedAt DateTime?     @map("published_at") @db.Timestamptz
   createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz
   updatedAt   DateTime      @updatedAt @map("updated_at") @db.Timestamptz

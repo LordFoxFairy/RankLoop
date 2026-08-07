@@ -28,6 +28,8 @@ export interface ContentSnapshot {
   format: ContentFormat
   status: ContentStatus
   currentVersion: ContentVersion | null
+  /** 线上实际生效的版本号；与 currentVersion 不同说明有修订待发布 */
+  publishedVersionNumber: number | null
   publishedAt: Date | null
 }
 
@@ -47,6 +49,7 @@ export class Content {
     private _status: ContentStatus,
     private _currentVersion: ContentVersion | null,
     private _publishedAt: Date | null,
+    private _publishedVersionNumber: number | null = null,
     private _pendingVersion: ContentVersion | null = null,
   ) {}
 
@@ -65,6 +68,8 @@ export class Content {
       'draft',
       params.version,
       null,
+      // 新建内容尚未发布，线上版本为空；pendingVersion 记录待持久化的首个版本
+      null,
       params.version,
     )
   }
@@ -78,6 +83,7 @@ export class Content {
       snapshot.status,
       snapshot.currentVersion,
       snapshot.publishedAt,
+      snapshot.publishedVersionNumber,
     )
   }
 
@@ -91,6 +97,11 @@ export class Content {
 
   get currentVersion(): ContentVersion | null {
     return this._currentVersion
+  }
+
+  /** 线上生效的版本号；与 currentVersion 不同表示有修订尚未发布 */
+  get publishedVersionNumber(): number | null {
+    return this._publishedVersionNumber
   }
 
   get publishedAt(): Date | null {
@@ -137,12 +148,16 @@ export class Content {
    */
   publish(check: SeoCheck, now: Date): void {
     this.assertNotArchived()
-    const isRepublish = this._status === 'published'
-    if (isRepublish && !this._pendingVersion) throw new ContentAlreadyPublished()
+    // 用版本号比对而非内存标记：聚合从数据库恢复时 pendingVersion 必为 null，
+    // 依赖它会让所有再次发布都被误判为「重复发布」。
+    const current = this._currentVersion?.version ?? null
+    if (this._status === 'published' && current === this._publishedVersionNumber) {
+      throw new ContentAlreadyPublished()
+    }
     if (!check.passesGate) throw new SeoGateNotPassed(check.blockingRules, check.score)
     this._status = 'published'
     this._publishedAt = now
-    // 已生效的版本不再是「待发布」，清空以便下次修订重新标记
+    this._publishedVersionNumber = current
     this._pendingVersion = null
   }
 

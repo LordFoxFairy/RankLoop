@@ -151,6 +151,12 @@ export class PrismaContentRepository implements ContentRepository {
           format: content.format,
           publishedAt: content.publishedAt,
           ...(version ? { currentVersionId: version.id } : {}),
+          // 发布时把线上版本指向当前版本；未发布则保持原值，
+          // 这样「已发布但有新修订」的状态才能被正确识别
+          ...(content.publishedVersionNumber !== null &&
+          content.publishedVersionNumber === content.currentVersion?.version
+            ? { publishedVersionId: content.currentVersion.id }
+            : {}),
         },
       })
     })
@@ -199,6 +205,7 @@ export class PrismaContentRepository implements ContentRepository {
     format: string
     status: string
     publishedAt: Date | null
+    publishedVersionId: string | null
     currentVersion: VersionRow | null
   }): Content {
     return Content.restore({
@@ -208,6 +215,11 @@ export class PrismaContentRepository implements ContentRepository {
       format: row.format as 'html' | 'markdown',
       status: row.status as 'draft' | 'published' | 'archived',
       currentVersion: toVersion(row.currentVersion),
+      // 线上版本号：与当前版本一致说明没有待发布的修订
+      publishedVersionNumber:
+        row.publishedVersionId && row.publishedVersionId === row.currentVersion?.id
+          ? (row.currentVersion?.version ?? null)
+          : null,
       publishedAt: row.publishedAt,
     })
   }

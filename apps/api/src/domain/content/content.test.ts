@@ -3,6 +3,7 @@ import { Content, ContentVersion } from './content'
 import { ContentAlreadyPublished, ContentArchived, SeoGateNotPassed } from './errors'
 import { SeoCheck } from './seo-check'
 import { ContentPath } from './values'
+import { ContentPath } from './values'
 
 const NOW = new Date('2026-08-06T00:00:00Z')
 
@@ -206,5 +207,47 @@ describe('ContentPath 值对象', () => {
 
   it('不可变', () => {
     expect(Object.isFrozen(ContentPath.create('/a'))).toBe(true)
+  })
+})
+
+describe('Content 聚合根 — 从持久化恢复后发布', () => {
+  /**
+   * 这组用例针对一个真实逃逸的 bug：判断「能否再次发布」原本依赖
+   * 内存里的 pendingVersion，而聚合从数据库恢复时它必为 null，
+   * 于是所有修订后的再次发布都被误判为「重复发布」，
+   * 修复版本永远上不了线。单测只测内存态，所以没抓到。
+   */
+  const restored = (opts: { currentVersion: number; publishedVersion: number | null }) =>
+    Content.restore({
+      id: 'c1',
+      siteId: 's1',
+      path: ContentPath.create('/a'),
+      format: 'html',
+      status: opts.publishedVersion === null ? 'draft' : 'published',
+      currentVersion: version(check(), opts.currentVersion),
+      publishedVersionNumber: opts.publishedVersion,
+      publishedAt: opts.publishedVersion === null ? null : NOW,
+    })
+
+  it('线上版本落后于当前版本时，可以再次发布', () => {
+    const c = restored({ currentVersion: 3, publishedVersion: 2 })
+    expect(() => c.publish(check(), NOW)).not.toThrow()
+    expect(c.publishedVersionNumber).toBe(3)
+  })
+
+  it('线上版本已是最新时，拒绝重复发布', () => {
+    const c = restored({ currentVersion: 2, publishedVersion: 2 })
+    expect(() => c.publish(check(), NOW)).toThrow(ContentAlreadyPublished)
+  })
+
+  it('再次发布同样受门槛约束', () => {
+    const c = restored({ currentVersion: 3, publishedVersion: 2 })
+    expect(() => c.publish(check({ critical: 1 }), NOW)).toThrow(SeoGateNotPassed)
+  })
+
+  it('从未发布的内容首次发布正常', () => {
+    const c = restored({ currentVersion: 1, publishedVersion: null })
+    expect(() => c.publish(check(), NOW)).not.toThrow()
+    expect(c.status).toBe('published')
   })
 })
