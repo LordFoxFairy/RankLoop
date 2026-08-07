@@ -171,3 +171,49 @@ IndexNow 通知的是 Bing / Yandex / Seznam / Naver，**Google 不支持该协�
 第一版默认不提供 CI 自动部署到服务器。若需要，可添加受保护的
 `deploy-production.yml`，但必须配置 GitHub Environment 与审批规则，
 **不得把生产 SSH 私钥写进仓库**。
+
+---
+
+## 营销站手动部署到 Cloudflare Pages
+
+CI 里若未配置 `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`，
+`deploy-cloudflare.yml` 会跳过部署（日志显示「未配置…跳过部署」）。
+在补上 Secrets 之前，可用以下步骤手动发布：
+
+```bash
+export SITE_URL=https://rankloop.miaokit.cloud
+npm run build --workspace @rankloop/seo-rules
+npm run build --workspace @rankloop/static-site
+node apps/static-site/dist/cli.js          # 生成 dist-site（含 sitemap/robots）
+
+# Google 验证文件：由 gsc-cli --write-token 生成，需要 GSC_SERVICE_ACCOUNT。
+# 若本地无凭据，可从 deploy-site.yml 的构建产物中取出 google*.html 放进 dist-site/。
+export GSC_SERVICE_ACCOUNT='<服务账号 JSON>'
+node apps/static-site/dist/gsc-cli.js --write-token
+
+npx wrangler@4 pages deploy dist-site --project-name=rankloop --branch=main
+```
+
+**易漏的一步**：`google<...>.html` 验证文件必须随站点一起部署，
+否则 Search Console 会报 `The necessary verification token could not be found on your site`，
+sitemap 提交随之失败。
+
+### 自定义域名
+
+DNS 需要一条指向 Pages 的 CNAME（Cloudflare 代理开启）：
+
+```
+rankloop.miaokit.cloud  CNAME  rankloop.pages.dev   (proxied)
+```
+
+并在 Pages 项目里绑定该域名。两者缺一，域名都无法访问。
+
+### 排查提示
+
+本机 `dig` 若返回 `198.18.x.x`，那是本地 VPN/代理拦截了 DNS，
+不是配置问题——该网段是保留的测试网段。用公共 DoH 验证真实解析：
+
+```bash
+curl -s -H "accept: application/dns-json" \
+  "https://dns.google/resolve?name=rankloop.miaokit.cloud&type=A"
+```
