@@ -18,7 +18,8 @@ databases:
     plan: free
 
 services:
-  - type: redis
+  # 注意：类型是 keyvalue，redis 是已废弃的旧别名
+  - type: keyvalue
     name: rankloop-redis
     plan: free
     # 仅供内部服务访问，不对公网开放
@@ -31,9 +32,10 @@ services:
     dockerfilePath: ./Dockerfile
     plan: free
     healthCheckPath: /health/live
-    # compose 里迁移是独立服务；Render 只跑一个容器，
-    # 因此必须在启动前迁移，否则 API 会连到空库
-    preDeployCommand: npx prisma migrate deploy --schema packages/db/prisma/schema.prisma
+    # compose 里迁移是独立服务；Render 单容器且免费层与 Docker 服务
+    # 都不支持 preDeployCommand，因此把迁移并进启动命令。
+    # 不迁移就启动会连到空库，所有接口都会 500。
+    dockerCommand: /bin/sh -c "npx prisma migrate deploy --schema packages/db/prisma/schema.prisma && node apps/api/dist/server.js"
     envVars:
       - key: NODE_ENV
         value: production

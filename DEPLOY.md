@@ -251,6 +251,11 @@ Cloudflare Pages 只托管静态站，跑不了 PostgreSQL 与常驻 worker，
 - 免费 PostgreSQL 有效期 90 天，到期需迁移或升级
 - 正式对外服务请升级到付费实例
 
+**数据库迁移为什么写在启动命令里**：Render 的 `preDeployCommand`
+对 Docker 服务和免费层都不可用，因此 `render.yaml` 把迁移并进
+`dockerCommand`（先 `prisma migrate deploy` 再启动服务）。
+若改用付费层，可以拆成独立的 pre-deploy 步骤。
+
 ### 部署后自检
 
 ```bash
