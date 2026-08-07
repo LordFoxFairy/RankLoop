@@ -186,7 +186,7 @@ const HTML = String.raw`<!doctype html>
                     <div class="issue-main">
                       <div class="issue-msg" x-text="i.message"></div>
                       <div class="issue-meta">
-                        <span x-text="i.count+' 个页面'"></span>
+                        <span x-text="impactLabel(i)"></span>
                         <span x-text="'约 '+fmtMinutes(i.minutes)"></span>
                         <code x-text="i.code"></code>
                       </div>
@@ -212,7 +212,7 @@ const HTML = String.raw`<!doctype html>
                     <div class="issue-main">
                       <div class="issue-msg" x-text="i.message"></div>
                       <div class="issue-meta">
-                        <span x-text="i.count+' 个页面'"></span>
+                        <span x-text="impactLabel(i)"></span>
                         <span x-text="'约 '+fmtMinutes(i.minutes)"></span>
                         <code x-text="i.code"></code>
                       </div>
@@ -806,11 +806,24 @@ function app() {
       ]
     },
 
-    /** 条形宽度：以覆盖页面最多的那条为满格，表达相对影响范围 */
+    /**
+     * 条形宽度：占全部内容的比例。
+     *
+     * 不用「相对最大值」——内容少时所有问题影响面相同，条形会全部满格，
+     * 变成没有信息量的装饰。占比是绝对量，「影响 1/8」和「影响 8/8」
+     * 一眼可辨，内容规模变大后仍然成立。
+     */
     impactWidth(i) {
-      const all = this.stats.top_issues || []
-      const max = Math.max(1, ...all.map(x => x.count))
-      return Math.max(4, (i.count / max) * 100).toFixed(1)
+      const total = this.stats.contents?.total || 1
+      return Math.max(3, Math.min(100, (i.count / total) * 100)).toFixed(1)
+    },
+
+    /** 影响面文案：给条形一个可读的说明 */
+    impactLabel(i) {
+      const total = this.stats.contents?.total || 0
+      if (!total) return i.count + ' 个页面'
+      const pct = Math.round((i.count / total) * 100)
+      return i.count + '/' + total + ' 篇内容（' + pct + '%）'
     },
 
     /** 与区间起点相比的变化，用于「比上周 +5」这类判断 */
