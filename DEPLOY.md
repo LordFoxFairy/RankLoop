@@ -220,6 +220,18 @@ curl -s -H "accept: application/dns-json" \
 
 ---
 
+## 为什么 API 不能放在 Cloudflare
+
+Cloudflare Pages 只托管静态文件，跑不了 PostgreSQL、Redis 与常驻 worker。
+
+Containers 于 2026-04 正式可用，也支持 Docker Hub 镜像，但官方定价表明确写着
+**Free 层的 Memory / CPU / Disk 均为 N/A** —— 即容器功能需要 $5/月的
+Workers Paid 计划（含 25 GiB-hours 内存、375 vCPU-分钟）。
+核实于 2026-08-07：https://developers.cloudflare.com/workers/platform/pricing/
+
+因此完全免费的路径是下面的 Render 蓝图；若愿意付 $5/月，
+Cloudflare Containers 也可行（镜像已在 `ghcr.io/lordfoxfairy/rankloop`）。
+
 ## 把完整 API 部署到公网（Render 一键蓝图）
 
 Cloudflare Pages 只托管静态站，跑不了 PostgreSQL 与常驻 worker，
