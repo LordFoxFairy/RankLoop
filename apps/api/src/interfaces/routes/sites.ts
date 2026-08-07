@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto'
 import type { PrismaClient } from '@prisma/client'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
@@ -98,7 +99,16 @@ export async function siteRoutes(app: FastifyInstance, prisma: PrismaClient): Pr
     }
 
     const site = await prisma.site.create({
-      data: { workspaceId, name: parsed.data.name, origin, slug, domain: parsed.data.domain },
+      data: {
+        workspaceId,
+        name: parsed.data.name,
+        origin,
+        slug,
+        domain: parsed.data.domain,
+        // 建站即生成 IndexNow key：不生成的话发布后的搜索引擎通知会静默跳过，
+        // 闭环默认就是断的，而客户不会意识到还要单独调一次配置接口。
+        indexNowKey: { create: { key: randomBytes(16).toString('hex') } },
+      },
     })
 
     return reply.code(201).send({
