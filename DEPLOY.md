@@ -217,3 +217,48 @@ rankloop.miaokit.cloud  CNAME  rankloop.pages.dev   (proxied)
 curl -s -H "accept: application/dns-json" \
   "https://dns.google/resolve?name=rankloop.miaokit.cloud&type=A"
 ```
+
+---
+
+## 把完整 API 部署到公网（Render 一键蓝图）
+
+Cloudflare Pages 只托管静态站，跑不了 PostgreSQL 与常驻 worker，
+因此完整闭环（发布门槛、webhook 投递、面板数据）需要一个能跑容器的地方。
+仓库根目录的 `render.yaml` 已把资源编排好，无需手写配置。
+
+### 步骤
+
+1. 注册 https://render.com（免费，GitHub 账号可直接登录）
+2. **New → Blueprint** → 选择本仓库 → Render 自动读取 `render.yaml`
+3. 只需手填三个值，其余自动生成或互相引用：
+
+   | 变量 | 填什么 |
+   |---|---|
+   | `APP_URL` | Render 分配的地址，如 `https://rankloop-api.onrender.com` |
+   | `INITIAL_ADMIN_EMAIL` | 你的邮箱，用于登录控制台 |
+   | `GSC_SERVICE_ACCOUNT` | 可选；填了才会自动同步 Search Console |
+
+4. 部署完成后，在服务的 **Environment** 页查看自动生成的
+   `INITIAL_ADMIN_PASSWORD`，用它登录 `<APP_URL>/console`
+
+`DATABASE_URL`、`REDIS_URL` 由 Render 自动注入；
+`SESSION_SECRET`、`ENCRYPTION_KEY` 自动生成随机值——
+生产环境若使用示例密钥，`lib/env.ts` 会直接拒绝启动。
+
+### 免费层的限制（如实说明）
+
+- Web Service 闲置 15 分钟休眠，首次请求约需 30 秒唤醒
+- 免费 PostgreSQL 有效期 90 天，到期需迁移或升级
+- 正式对外服务请升级到付费实例
+
+### 部署后自检
+
+```bash
+export BASE=https://<你的地址>/api/v1
+curl -s $BASE/rules | head -c 100                 # 应返回 JSON 规则清单
+curl -s -X POST $BASE/auth/login -H 'content-type: application/json' \
+  -d '{"email":"<邮箱>","password":"<密码>"}' -o /dev/null -w '%{http_code}\n'   # 200
+```
+
+登录后在控制台「租户」页创建租户并签发 API Key，
+即可用 Python SDK 跑通完整闭环（见 `sdk/python/README.md`）。

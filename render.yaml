@@ -1,0 +1,71 @@
+# Render 一键部署蓝图。
+#
+# 用途：把完整 API（含门槛、webhook、面板数据）部署到公网。
+# Cloudflare Pages 只能托管静态站，跑不了 PostgreSQL 与常驻 worker。
+#
+# 使用方式：
+#   1. 注册 https://render.com（免费）
+#   2. New → Blueprint → 连接本仓库 → Render 读取本文件自动建资源
+#   3. 部署后在服务的 Environment 里确认 INITIAL_ADMIN_PASSWORD，用它登录 /console
+#
+# 免费层注意：Web Service 闲置 15 分钟会休眠，首次请求需要约 30 秒唤醒；
+# 免费 PostgreSQL 有效期 90 天。生产使用请升级到付费实例。
+
+databases:
+  - name: rankloop-db
+    databaseName: rankloop
+    user: rankloop
+    plan: free
+
+services:
+  - type: redis
+    name: rankloop-redis
+    plan: free
+    # 仅供内部服务访问，不对公网开放
+    ipAllowList: []
+    maxmemoryPolicy: noeviction
+
+  - type: web
+    name: rankloop-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health/live
+    # compose 里迁移是独立服务；Render 只跑一个容器，
+    # 因此必须在启动前迁移，否则 API 会连到空库
+    preDeployCommand: npx prisma migrate deploy --schema packages/db/prisma/schema.prisma
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 8080
+      # 决定 canonical 与 og:image。填错会把 SEO 权重送给别的域名，
+      # 因此 lib/env.ts 会在启动时拒绝示例域名与 localhost。
+      - key: APP_URL
+        sync: false
+      - key: PLATFORM_DOMAIN
+        value: rankloop.miaokit.cloud
+      - key: DATABASE_URL
+        fromDatabase:
+          name: rankloop-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: rankloop-redis
+          property: connectionString
+      # 由 Render 生成随机值；生产环境使用示例密钥会导致启动失败
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: ENCRYPTION_KEY
+        generateValue: true
+      - key: REGISTRATION_MODE
+        value: closed
+      - key: INITIAL_ADMIN_EMAIL
+        sync: false
+      # 首次启动创建管理员；随机生成后在 Render 控制台查看
+      - key: INITIAL_ADMIN_PASSWORD
+        generateValue: true
+      # 可选：配置后自动回读 Search Console 数据并提交 sitemap
+      - key: GSC_SERVICE_ACCOUNT
+        sync: false
