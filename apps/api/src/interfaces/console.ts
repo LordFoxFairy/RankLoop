@@ -358,7 +358,9 @@ const HTML = String.raw`<!doctype html>
             </div>
           </template>
 
-          <template x-if="form.siteId && perf">
+          <!-- 有数据才显示指标与图表；零数据时上面的引导已说明情况，
+               再摆一排 0 和空图表只会自相矛盾 -->
+          <template x-if="form.siteId && perf && (perf.clicks || perf.impressions)">
             <div>
               <div class="metrics">
                 <div class="metric"><div class="k">点击</div>
