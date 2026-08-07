@@ -2,7 +2,9 @@ import type { Content } from '../../domain/content'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import type { ContentService } from '../../application/content-service'
+import { SeoGateNotPassed } from '../../domain/content'
 import { audit } from '../../infrastructure/audit'
+import { enqueueEvent } from '../../infrastructure/webhook-dispatcher'
 import { requireScope } from '../../lib/auth'
 import { badRequest } from '../error-mapper'
 
@@ -193,7 +195,35 @@ export async function contentRoutes(
     { preHandler: requireScope('contents:publish') },
     async (req, reply) => {
       const auth = req.auth!
-      const content = await service.publish(req.params.contentId, auth.workspaceId)
+
+      let content: Awaited<ReturnType<typeof service.publish>>
+      try {
+        content = await service.publish(req.params.contentId, auth.workspaceId)
+      } catch (e) {
+        // 被门槛拦截时推送事件——这是「持续优化」闭环的起点：
+        // 客户收到通知才知道该修什么，否则只有主动调接口才发现得了。
+        if (prisma && e instanceof SeoGateNotPassed) {
+          void enqueueEvent(prisma, {
+            event: 'content.gate_failed',
+            workspaceId: auth.workspaceId,
+            data: {
+              content_id: req.params.contentId,
+              blocking: e.blockingRules,
+              score: e.score,
+            },
+            links: {
+              // 轻 payload：详情与修复建议让客户凭密钥来拉，
+              // 这样重试时拿到的始终是最新状态
+              recommendations: `/api/v1/contents/${req.params.contentId}/recommendations`,
+              content: `/api/v1/contents/${req.params.contentId}`,
+            },
+          }).catch(() => {
+            // 推送失败不能改变发布结果，客户仍应收到 422
+          })
+        }
+        throw e
+      }
+
       const origin = await siteOrigin(content.siteId, auth.workspaceId)
       if (prisma) {
         audit(prisma, req, {
@@ -202,6 +232,17 @@ export async function contentRoutes(
           resourceId: content.id,
           metadata: { path: content.path.value },
         })
+        void enqueueEvent(prisma, {
+          event: 'content.published',
+          workspaceId: auth.workspaceId,
+          siteId: content.siteId,
+          data: {
+            content_id: content.id,
+            path: content.path.value,
+            score: content.currentVersion?.check.score,
+          },
+          links: { live_url: `${origin}${content.path.value}` },
+        }).catch(() => {})
       }
       return reply.send({
         data: serializeContent(content, `${origin}${content.path.value}`),

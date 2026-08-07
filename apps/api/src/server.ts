@@ -24,6 +24,7 @@ import { GSC_WRITE_SCOPE } from './infrastructure/gsc-sitemap'
 import { startGscSyncWorker } from './infrastructure/gsc-sync'
 import { startIndexNowWorker } from './infrastructure/indexnow-dispatcher'
 import { createIndexNotifier } from './infrastructure/prisma-index-notifier'
+import { startWebhookWorker } from './infrastructure/webhook-dispatcher'
 import { indexingRoutes } from './interfaces/routes/indexing'
 import { analyticsRoutes } from './interfaces/routes/analytics'
 import { authRoutes, createSessionMiddleware } from './interfaces/routes/auth'
@@ -31,6 +32,7 @@ import { contentDetailRoutes } from './interfaces/routes/content-detail'
 import { siteDomainRoutes } from './interfaces/routes/site-domains'
 import { siteRoutes } from './interfaces/routes/sites'
 import { statsRoutes } from './interfaces/routes/stats'
+import { webhookRoutes } from './interfaces/routes/webhooks'
 import { openApiRoutes } from './interfaces/routes/openapi'
 
 /** 组合根：在此装配各层依赖，其余代码只依赖接口 */
@@ -174,6 +176,7 @@ export async function buildServer(env: Env, prisma: PrismaClient): Promise<Fasti
       await siteDomainRoutes(scoped, prisma, platformDomain)
       await contentDetailRoutes(scoped, prisma)
       await analyticsRoutes(scoped, prisma)
+      await webhookRoutes(scoped, prisma)
     },
     { prefix: '/api/v1' },
   )
@@ -203,6 +206,11 @@ async function main(): Promise<void> {
   const stopWorker = startIndexNowWorker(prisma)
   app.addHook('onClose', async () => stopWorker())
 
+  // 后台投递 webhook：客户的接收端可能很慢甚至挂掉，
+  // 不能让它拖垮发布接口，因此入库与投递分离。
+  const stopWebhooks = startWebhookWorker(prisma)
+  app.addHook('onClose', async () => stopWebhooks())
+
   // 后台回读 Search Console 数据。没有它，面板上的搜索表现
   // 只会停在客户最后一次手动点「同步」的那天，闭环断在最后一步。
   // 未配置服务账号时不启动——避免每小时空转报错。
@@ -222,6 +230,13 @@ async function main(): Promise<void> {
         }) as never
       },
       submitSitemap: true,
+      onSitemapError: (siteId, siteUrl, error) => {
+        app.log.warn(
+          { siteId, siteUrl, error },
+          'sitemap 提交失败：确认服务账号已加为该资源的用户，' +
+            '且资源类型正确（网域资源需在站点 settings.gscProperty 填 sc-domain:example.com）',
+        )
+      },
     })
     app.addHook('onClose', async () => stopGsc())
     app.log.info('Search Console 自动同步已启用（每站每天提交 sitemap 并回读搜索表现）')

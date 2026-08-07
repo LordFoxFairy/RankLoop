@@ -177,7 +177,16 @@ export function gscSiteUrl(site: {
   origin: string
   domain: string | null
   domainVerifiedAt: Date | null
+  settings?: unknown
 }): string {
+  // Search Console 有两种资源类型，地址格式不同：
+  //   - 网址前缀：https://acme.com/
+  //   - 网域资源：sc-domain:acme.com（GSC 界面现在的默认推荐）
+  // 客户注册的是哪种只有客户知道，猜错会 403 且没有别的线索，
+  // 因此允许在站点配置里显式覆盖。
+  const override = (site.settings as { gscProperty?: unknown } | null)?.gscProperty
+  if (typeof override === 'string' && override.trim()) return override.trim()
+
   return site.domain && site.domainVerifiedAt
     ? `https://${site.domain}/`
     : `${site.origin.replace(/\/$/, '')}/`
@@ -277,6 +286,8 @@ export async function syncAllSites(params: {
   now?: Date
   /** 是否同时提交 sitemap；需要 webmasters 写权限 */
   submitSitemap?: boolean
+  /** sitemap 提交失败时的回调，用于记日志——静默失败最难排查 */
+  onSitemapError?: (siteId: string, siteUrl: string, error: string) => void
 }): Promise<{ synced: number; skipped: number; failed: number }> {
   const { prisma } = params
   const now = params.now ?? new Date()
@@ -285,7 +296,7 @@ export async function syncAllSites(params: {
 
   const sites = await prisma.site.findMany({
     where: { archivedAt: null, contents: { some: { status: 'published' } } },
-    select: { id: true, origin: true, domain: true, domainVerifiedAt: true },
+    select: { id: true, origin: true, domain: true, domainVerifiedAt: true, settings: true },
   })
   if (sites.length === 0) return result
 
@@ -315,7 +326,10 @@ export async function syncAllSites(params: {
     // 让 Google 更快发现新内容在 Google 侧唯一的主动手段。
     // 失败不影响回读数据——两件事互相独立。
     if (params.submitSitemap) {
-      await submitSitemap({ client, siteUrl, sitemapUrl: sitemapUrlFor(site.origin) })
+      const r = await submitSitemap({ client, siteUrl, sitemapUrl: sitemapUrlFor(site.origin) })
+      // 提交失败最常见的原因是资源类型或授权不对，且 Google 只回 403，
+      // 不留痕的话客户会以为一直在提交——必须让失败可见。
+      if (!r.submitted) params.onSitemapError?.(site.id, siteUrl, r.error ?? '未知错误')
     }
 
     try {
@@ -349,6 +363,8 @@ export function startGscSyncWorker(params: {
   intervalHours?: number
   /** 是否顺带提交 sitemap；需要 webmasters 写权限 */
   submitSitemap?: boolean
+  /** sitemap 提交失败时的回调，用于记日志 */
+  onSitemapError?: (siteId: string, siteUrl: string, error: string) => void
 }): () => void {
   let running = false
 
@@ -361,6 +377,7 @@ export function startGscSyncWorker(params: {
         buildClient: params.buildClient,
         intervalHours: params.intervalHours ?? 24,
         submitSitemap: params.submitSitemap,
+        onSitemapError: params.onSitemapError,
       })
     } catch {
       // 单次失败不应终止 worker
