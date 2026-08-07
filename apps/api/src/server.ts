@@ -22,6 +22,7 @@ import { landingRoutes } from './interfaces/landing'
 import { contentRoutes } from './interfaces/routes/contents'
 import { startIndexNowWorker } from './infrastructure/indexnow-dispatcher'
 import { indexingRoutes } from './interfaces/routes/indexing'
+import { analyticsRoutes } from './interfaces/routes/analytics'
 import { authRoutes, createSessionMiddleware } from './interfaces/routes/auth'
 import { contentDetailRoutes } from './interfaces/routes/content-detail'
 import { siteDomainRoutes } from './interfaces/routes/site-domains'
@@ -119,6 +120,7 @@ export async function buildServer(env: Env, prisma: PrismaClient): Promise<Fasti
     await landingRoutes(scoped, {
       ruleCount: listRules().length,
       criticalCount: listRules().filter((r) => r.severity === 'critical').length,
+      siteUrl: env.APP_URL.replace(/\/$/, ''),
     })
   })
 
@@ -164,6 +166,7 @@ export async function buildServer(env: Env, prisma: PrismaClient): Promise<Fasti
       await siteRoutes(scoped, prisma)
       await siteDomainRoutes(scoped, prisma, platformDomain)
       await contentDetailRoutes(scoped, prisma)
+      await analyticsRoutes(scoped, prisma)
     },
     { prefix: '/api/v1' },
   )

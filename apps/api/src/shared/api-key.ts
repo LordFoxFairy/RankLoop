@@ -52,6 +52,7 @@ export const API_KEY_SCOPES = [
   'issues:read',
   'indexing:read',
   'indexing:write',
+  'analytics:read',
   'webhooks:write',
 ] as const
 

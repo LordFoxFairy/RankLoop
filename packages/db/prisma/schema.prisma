@@ -137,6 +137,8 @@ model Site {
   contents    Content[]
   indexNowKey IndexNowKey?
   indexNowSubmissions IndexNowSubmission[]
+  searchAnalytics SearchAnalytics[]
+  gscSyncJobs GscSyncJob[]
 
   @@unique([workspaceId, origin])
   @@index([domain])
@@ -254,6 +256,58 @@ model IndexNowSubmission {
   @@unique([siteId, idempotencyKey])
   @@index([siteId, createdAt])
   @@map("indexnow_submissions")
+}
+
+// ---------- Search Console 数据 ----------
+
+/**
+ * 每日搜索表现，按 站点+日期+维度 存储。
+ *
+ * Search Console 数据有 2-3 天延迟，且历史数据可能被回溯修正，
+ * 因此用 upsert 而非 insert——同一天重复同步应覆盖而非累加。
+ */
+model SearchAnalytics {
+  id          String   @id @default(uuid()) @db.Uuid
+  siteId      String   @map("site_id") @db.Uuid
+  date        DateTime @db.Date
+  // 维度值：query 为关键词，page 为落地页。
+  // 用空串而非 NULL 表示「该维度未使用」——Postgres 中 NULL != NULL，
+  // 含 NULL 的唯一索引无法去重，重复同步会产生重复行。
+  query       String   @default("")
+  page        String   @default("")
+  country     String   @default("")
+  device      String   @default("")
+  clicks      Int      @default(0)
+  impressions Int      @default(0)
+  ctr         Float    @default(0)
+  position    Float    @default(0)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  site        Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  // 同一维度组合每天只应有一条；重复同步时按此键覆盖
+  @@unique([siteId, date, query, page, country, device], name: "unique_metric")
+  @@index([siteId, date])
+  @@index([siteId, query])
+  @@map("search_analytics")
+}
+
+/** 同步任务记录：游标、时间范围、错误与配额状态 */
+model GscSyncJob {
+  id          String   @id @default(uuid()) @db.Uuid
+  siteId      String   @map("site_id") @db.Uuid
+  startDate   DateTime @map("start_date") @db.Date
+  endDate     DateTime @map("end_date") @db.Date
+  status      String   @default("running")
+  rowsSynced  Int      @default(0) @map("rows_synced")
+  error       String?
+  startedAt   DateTime @default(now()) @map("started_at") @db.Timestamptz
+  finishedAt  DateTime? @map("finished_at") @db.Timestamptz
+
+  site        Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([siteId, startedAt])
+  @@map("gsc_sync_jobs")
 }
 
 // ---------- API Key / Webhook / 审计 ----------

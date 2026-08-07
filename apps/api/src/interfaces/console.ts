@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { FastifyInstance } from 'fastify'
 
@@ -631,6 +631,23 @@ export async function consoleRoutes(app: FastifyInstance): Promise<void> {
     const content = readFileSync(join(assetDir, file), 'utf8')
     return async (_req: unknown, reply: { type: (t: string) => { header: (k: string, v: string) => { send: (c: string) => unknown } } }) =>
       reply.type(type).header('cache-control', 'public, max-age=31536000, immutable').send(content)
+  }
+
+  // 品牌图片。占位版本为 SVG，替换为 PNG 时同名覆盖即可。
+  for (const [file, type] of [
+    ['og-cover.svg', 'image/svg+xml'],
+    ['logo.svg', 'image/svg+xml'],
+  ] as const) {
+    const full = join(assetDir, 'img', file)
+    if (existsSync(full)) {
+      const content = readFileSync(full, 'utf8')
+      app.get(`/img/${file}`, async (_req, reply) =>
+        reply
+          .type(type)
+          .header('cache-control', 'public, max-age=86400')
+          .send(content),
+      )
+    }
   }
 
   app.get('/assets/alpine.js', asset('alpine.js', 'application/javascript; charset=utf-8'))

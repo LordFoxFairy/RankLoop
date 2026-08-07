@@ -19,6 +19,8 @@ function escapeHtml(s: string): string {
 export interface LandingData {
   ruleCount: number
   criticalCount: number
+  /** 站点绝对地址：og:image 必须是绝对 URL，相对路径社交平台抓不到 */
+  siteUrl: string
 }
 
 const FEATURES = [
@@ -106,10 +108,15 @@ export function renderLanding(data: LandingData): string {
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <title>RankLoop — 内容发布前的 SEO 门槛</title>
 <meta name="description" content="RankLoop 在内容发布前执行 ${data.ruleCount} 条 SEO 规则检测，不合格的内容无法发布。托管内容并按域名渲染，自动生成 sitemap 并提交搜索引擎。">
-<link rel="canonical" href="/">
+<link rel="canonical" href="${escapeHtml(data.siteUrl)}/">
 <meta property="og:type" content="website">
 <meta property="og:title" content="RankLoop — 内容发布前的 SEO 门槛">
 <meta property="og:description" content="${data.ruleCount} 条规则自动检测，不合格的内容发不出去。">
+<meta property="og:image" content="${escapeHtml(data.siteUrl)}/img/og-cover.svg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="${escapeHtml(data.siteUrl)}/img/og-cover.svg">
 <style>
 :root{
   color-scheme:light dark;
