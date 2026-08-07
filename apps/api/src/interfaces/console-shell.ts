@@ -159,6 +159,27 @@ code{font-family:var(--mono);font-size:12px;background:var(--paper);
 .rec-cost .g{font:680 15px/1.2 var(--mono);color:var(--gain)}
 .rec-cost .m{font-size:11.5px;color:var(--muted);margin-top:2px}
 
+/* 问题分组：阻断发布与可选优化在视觉上必须一眼分得开 */
+.issue-group + .issue-group{border-top:1px solid var(--line)}
+.group-head{padding:11px 18px;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.group-head strong{font-size:13px;font-weight:640}
+.group-head span{font-size:12px;color:var(--muted)}
+.group-head.g-block{background:var(--blocked-soft)}
+.group-head.g-block strong{color:var(--blocked)}
+.issue-row{display:flex;align-items:center;gap:14px;padding:12px 18px;
+  border-top:1px solid var(--line)}
+.issue-main{min-width:0;flex:1}
+.issue-msg{font-size:13.5px;line-height:1.45}
+.issue-meta{display:flex;gap:12px;flex-wrap:wrap;margin-top:4px;
+  font-size:11.5px;color:var(--muted)}
+.issue-meta code{font-family:var(--mono);font-size:11px;opacity:.75}
+.issue-act{flex:none;font-size:12px;font-weight:600;white-space:nowrap;
+  font-family:var(--mono);font-variant-numeric:tabular-nums}
+.issue-act.blocked{color:var(--blocked)}
+.issue-act.gain{color:var(--gain)}
+@media(max-width:640px){.issue-row{flex-wrap:wrap;gap:6px}
+  .issue-act{width:100%;text-align:left}}
+
 .empty{text-align:center;padding:44px 20px;color:var(--muted);font-size:13.5px}
 .empty strong{display:block;color:var(--text);font-size:15px;margin-bottom:6px}
 .banner{padding:12px 15px;border-radius:10px;font-size:13px;margin-bottom:14px}

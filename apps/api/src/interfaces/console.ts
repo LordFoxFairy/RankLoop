@@ -123,22 +123,57 @@ const HTML = String.raw`<!doctype html>
           </div>
 
           <div class="panel">
-            <div class="panel-head"><h2>下一步该修什么</h2>
-              <span class="sub" style="margin-left:auto;color:var(--muted);font-size:12px">
-                阻断发布的优先，其余按可挽回分数排序</span></div>
+            <div class="panel-head"><h2>下一步该修什么</h2></div>
+
             <template x-if="!stats.top_issues?.length">
               <div class="empty"><strong>没有待处理的问题</strong>所有内容都已通过检测</div>
             </template>
-            <template x-if="stats.top_issues?.length">
-              <table><thead><tr><th>规则</th><th>级别</th><th class="num">影响页面</th>
-                <th class="num">可挽回</th><th class="num">预估耗时</th></tr></thead>
-              <tbody><template x-for="i in stats.top_issues" :key="i.code">
-                <tr><td><code x-text="i.code"></code></td>
-                    <td><span class="tag" :class="tagClass(i.severity)" x-text="sevLabel(i.severity)"></span></td>
-                    <td class="num" x-text="i.count"></td>
-                    <td class="num" style="color:var(--gain)" x-text="'+'+i.recoverable"></td>
-                    <td class="num" x-text="fmtMinutes(i.minutes)"></td></tr>
-              </template></tbody></table>
+
+            <!-- 阻断发布的问题：性质与下面完全不同，必须分开呈现 -->
+            <template x-if="blockingIssues().length">
+              <div class="issue-group">
+                <div class="group-head g-block">
+                  <strong>必须先修：这些页面发不出去</strong>
+                  <span x-text="'共 '+blockedPages()+' 个页面被挡住，修完约需 '+fmtMinutes(blockingMinutes())"></span>
+                </div>
+                <template x-for="i in blockingIssues()" :key="i.code">
+                  <div class="issue-row">
+                    <div class="issue-main">
+                      <div class="issue-msg" x-text="i.message"></div>
+                      <div class="issue-meta">
+                        <span x-text="i.count+' 个页面'"></span>
+                        <span x-text="'约 '+fmtMinutes(i.minutes)"></span>
+                        <code x-text="i.code"></code>
+                      </div>
+                    </div>
+                    <div class="issue-act blocked">发布被阻断</div>
+                  </div>
+                </template>
+              </div>
+            </template>
+
+            <!-- 可选优化：能发布，修了更好。用分数说明收益 -->
+            <template x-if="optionalIssues().length">
+              <div class="issue-group">
+                <div class="group-head g-opt">
+                  <strong>可以再优化：不影响发布</strong>
+                  <span x-text="'按性价比排序，先做省时见效的。全部修完约需 '+fmtMinutes(optionalMinutes())"></span>
+                </div>
+                <template x-for="i in optionalIssues()" :key="i.code">
+                  <div class="issue-row">
+                    <div class="issue-main">
+                      <div class="issue-msg" x-text="i.message"></div>
+                      <div class="issue-meta">
+                        <span x-text="i.count+' 个页面'"></span>
+                        <span x-text="'约 '+fmtMinutes(i.minutes)"></span>
+                        <code x-text="i.code"></code>
+                      </div>
+                    </div>
+                    <!-- 每页加分而非总和：健康分满分 100，跨页累加会得出 +257 这种无意义的数 -->
+                    <div class="issue-act gain" x-text="'每页 +'+perPageGain(i)+' 分'"></div>
+                  </div>
+                </template>
+              </div>
             </template>
           </div>
         </div>
@@ -778,6 +813,16 @@ function app() {
     tagClass(s) { return ({ critical: 't-blocked', warning: 't-warn', notice: 't-mute' })[s] ?? 't-mute' },
     // 超过一小时用「1.5 小时」比「90 分钟」更容易估量工作量
     fmtMinutes(m) { return m >= 60 ? (m / 60).toFixed(1).replace(/\.0$/, '') + ' 小时' : m + ' 分钟' },
+    // 阻断发布与可选优化是两件事，分开取用
+    blockingIssues() { return (this.stats.top_issues ?? []).filter((i) => i.blocking) },
+    optionalIssues() { return (this.stats.top_issues ?? []).filter((i) => !i.blocking) },
+    blockingMinutes() { return this.blockingIssues().reduce((s, i) => s + i.minutes, 0) },
+    optionalMinutes() { return this.optionalIssues().reduce((s, i) => s + i.minutes, 0) },
+    // recoverable 是跨页总和，除以页数还原成「每页能加多少分」——
+    // 健康分是单页 0-100，跨页累加没有意义
+    perPageGain(i) { return i.count > 0 ? Math.round(i.recoverable / i.count) : 0 },
+    // 用后端算好的阻塞内容数，不能拿问题条数当页面数——一个页面可能有多条问题
+    blockedPages() { return this.stats.blocked ?? 0 },
     actionLabel(a) {
       return ({
         'content.created': '推送内容', 'content.updated': '更新内容',

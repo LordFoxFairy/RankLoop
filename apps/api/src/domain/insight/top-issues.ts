@@ -14,17 +14,23 @@ import { effortMinutes } from '@rankloop/seo-rules'
 export interface IssueOccurrence {
   code: string
   severity: string
+  /** 规则给出的人话说明，检测时已写入 */
+  message?: string
 }
 
 export interface AggregatedIssue {
   code: string
   severity: string
+  /** 人话说明。面板展示这个，code 只作为技术参考 */
+  message: string
   /** 有多少个页面出现了这条问题 */
   count: number
   /** 全部修完能挽回的总分 */
   recoverable: number
   /** 全部修完的预估总耗时（分钟） */
   minutes: number
+  /** 是否阻断发布——这决定用户「现在必须处理」还是「有空再说」 */
+  blocking: boolean
 }
 
 export function aggregateTopIssues(params: {
@@ -39,9 +45,12 @@ export function aggregateTopIssues(params: {
       const entry = byRule.get(issue.code) ?? {
         code: issue.code,
         severity: issue.severity,
+        // 规则自带的说明就是人话，没有时退回 code 而不是留空
+        message: issue.message ?? issue.code,
         count: 0,
         recoverable: 0,
         minutes: 0,
+        blocking: issue.severity === 'critical',
       }
       entry.count += 1
       // 每个受影响页面都要各修一次，分值与耗时都按出现次数累加
@@ -57,8 +66,13 @@ export function aggregateTopIssues(params: {
       const aBlocks = a.severity === 'critical'
       const bBlocks = b.severity === 'critical'
       if (aBlocks !== bBlocks) return aBlocks ? -1 : 1
-      if (b.recoverable !== a.recoverable) return b.recoverable - a.recoverable
-      // 分值相同时先做省时的
+      // 非阻断项按性价比排序：花同样时间，先做挽回分数多的。
+      // 不能只看总分——「9 个页面各补一段描述」总分高但要 1.2 小时，
+      // 而「9 个页面各补 canonical」9 分钟就能做完，后者显然该先做。
+      const av = a.minutes > 0 ? a.recoverable / a.minutes : a.recoverable
+      const bv = b.minutes > 0 ? b.recoverable / b.minutes : b.recoverable
+      if (bv !== av) return bv - av
+      // 性价比相同时先做省时的，快速见效更利于推进
       return a.minutes - b.minutes
     })
     .slice(0, params.limit ?? 10)

@@ -10,9 +10,33 @@ const weights = {
 }
 
 /** 造 n 个都含同一条问题的检测结果 */
-function checks(code: string, severity: string, n: number) {
-  return Array.from({ length: n }, () => ({ issues: [{ code, severity }] }))
+function checks(code: string, severity: string, n: number, message?: string) {
+  return Array.from({ length: n }, () => ({ issues: [{ code, severity, message }] }))
 }
+
+describe('人话说明', () => {
+  it('透传规则给出的说明——面板要展示人话而非规则码', () => {
+    const [e] = aggregateTopIssues({
+      checks: checks('MISSING_TITLE', 'critical', 1, '页面缺少 title'),
+      weights,
+    })
+    expect(e.message).toBe('页面缺少 title')
+  })
+
+  it('缺说明时退回规则码，而不是留空让面板显示空白', () => {
+    const [e] = aggregateTopIssues({ checks: checks('MISSING_TITLE', 'critical', 1), weights })
+    expect(e.message).toBe('MISSING_TITLE')
+  })
+
+  it('标记是否阻断发布——面板据此分组，这是两类性质不同的事', () => {
+    const r = aggregateTopIssues({
+      checks: [...checks('MISSING_TITLE', 'critical', 1), ...checks('MISSING_LANG', 'notice', 1)],
+      weights,
+    })
+    expect(r.find((i) => i.code === 'MISSING_TITLE')?.blocking).toBe(true)
+    expect(r.find((i) => i.code === 'MISSING_LANG')?.blocking).toBe(false)
+  })
+})
 
 describe('工作区问题聚合', () => {
   it('阻断发布的问题排在高频小问题前面', () => {
@@ -33,17 +57,32 @@ describe('工作区问题聚合', () => {
     expect(result[1].recoverable).toBeGreaterThan(result[0].recoverable)
   })
 
-  it('同为非阻断问题时，按可挽回分数排序而非出现次数', () => {
+  it('同为非阻断问题时，按性价比排序而非出现次数', () => {
     const result = aggregateTopIssues({
       checks: [
-        ...checks('MISSING_LANG', 'notice', 10), // 10 × 3 = 30 分
-        ...checks('THIN_CONTENT', 'warning', 4), // 4 × 12 = 48 分
+        ...checks('MISSING_LANG', 'notice', 10), // 30 分 / 10 分钟 = 3.0
+        ...checks('THIN_CONTENT', 'warning', 4), // 48 分 / 100 分钟 = 0.48
       ],
       weights,
     })
 
-    // THIN_CONTENT 出现次数少，但修完能多挽回 18 分，应当先做
-    expect(result.map((i) => i.code)).toEqual(['THIN_CONTENT', 'MISSING_LANG'])
+    // THIN_CONTENT 总分更高，但每分钟只挽回 0.48 分；
+    // MISSING_LANG 10 分钟就能拿 30 分，应当先做
+    expect(result.map((i) => i.code)).toEqual(['MISSING_LANG', 'THIN_CONTENT'])
+  })
+
+  it('总分高但耗时长的问题，排在省时高效的后面', () => {
+    // 这是面板「按性价比排序」这句话的实际含义：
+    // 补 9 条 canonical（9 分钟）比补 9 段描述（1.2 小时）先做
+    const result = aggregateTopIssues({
+      checks: [
+        ...checks('MISSING_DESCRIPTION', 'warning', 9), // 90 分 / 72 分钟 = 1.25
+        ...checks('MISSING_CANONICAL', 'warning', 9), // 72 分 / 9 分钟 = 8.0
+      ],
+      weights: { ...weights, MISSING_DESCRIPTION: 10, MISSING_CANONICAL: 8 },
+    })
+
+    expect(result[0].code).toBe('MISSING_CANONICAL')
   })
 
   it('分值与耗时按受影响页面数累加', () => {
@@ -58,16 +97,17 @@ describe('工作区问题聚合', () => {
     expect(entry.minutes).toBe(5) // MISSING_LANG 每处 1 分钟
   })
 
-  it('多条 critical 之间仍按可挽回分数排序', () => {
+  it('多条 critical 之间按性价比排序——两者都阻断发布，先解开便宜的那个', () => {
     const result = aggregateTopIssues({
       checks: [
-        ...checks('MISSING_TITLE', 'critical', 1), // 15 分
-        ...checks('EMPTY_CONTENT', 'critical', 1), // 20 分
+        ...checks('MISSING_TITLE', 'critical', 1), // 15 分 / 8 分钟 = 1.88
+        ...checks('EMPTY_CONTENT', 'critical', 1), // 20 分 / 30 分钟 = 0.67
       ],
       weights,
     })
 
-    expect(result.map((i) => i.code)).toEqual(['EMPTY_CONTENT', 'MISSING_TITLE'])
+    // 补标题 8 分钟就能解阻断，写正文要 30 分钟，先做前者
+    expect(result.map((i) => i.code)).toEqual(['MISSING_TITLE', 'EMPTY_CONTENT'])
   })
 
   it('可挽回分数相同时先做省时的', () => {

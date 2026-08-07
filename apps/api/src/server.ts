@@ -20,6 +20,7 @@ import { dashboardRoutes } from './interfaces/dashboard'
 import { docsRoutes } from './interfaces/docs'
 import { landingRoutes } from './interfaces/landing'
 import { contentRoutes } from './interfaces/routes/contents'
+import { startGscSyncWorker } from './infrastructure/gsc-sync'
 import { startIndexNowWorker } from './infrastructure/indexnow-dispatcher'
 import { indexingRoutes } from './interfaces/routes/indexing'
 import { analyticsRoutes } from './interfaces/routes/analytics'
@@ -197,6 +198,29 @@ async function main(): Promise<void> {
   // 后台投递 IndexNow 提交（规格 §3.7：外部请求不阻塞 HTTP 线程）
   const stopWorker = startIndexNowWorker(prisma)
   app.addHook('onClose', async () => stopWorker())
+
+  // 后台回读 Search Console 数据。没有它，面板上的搜索表现
+  // 只会停在客户最后一次手动点「同步」的那天，闭环断在最后一步。
+  // 未配置服务账号时不启动——避免每小时空转报错。
+  const gscCredentials = process.env.GSC_SERVICE_ACCOUNT
+  if (gscCredentials) {
+    const stopGsc = startGscSyncWorker({
+      prisma,
+      buildClient: async () => {
+        const { JWT } = await import('google-auth-library')
+        const creds = JSON.parse(gscCredentials) as { client_email: string; private_key: string }
+        return new JWT({
+          email: creds.client_email,
+          key: creds.private_key,
+          scopes: ['https://www.googleapis.com/auth/webmasters.readonly'],
+        }) as never
+      },
+    })
+    app.addHook('onClose', async () => stopGsc())
+    app.log.info('Search Console 自动同步已启用（每小时检查，每站每天同步一次）')
+  } else {
+    app.log.warn('未配置 GSC_SERVICE_ACCOUNT，搜索表现数据只能手动同步')
+  }
 
   await app.listen({ port: env.PORT, host: '0.0.0.0' })
 }

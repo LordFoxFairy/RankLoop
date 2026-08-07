@@ -165,6 +165,34 @@ export async function syncSite(params: {
   }
 }
 
+/**
+ * 推导 Search Console 中登记的属性地址。
+ *
+ * 必须与站点实际对外地址一致，否则 GSC 查不到任何数据且不报错。
+ * 已验证的自有域名优先——内容权重积累在客户自己的域名下。
+ * 手动同步与自动同步共用此函数，避免两条路径推导出不同地址。
+ */
+export function gscSiteUrl(site: {
+  origin: string
+  domain: string | null
+  domainVerifiedAt: Date | null
+}): string {
+  return site.domain && site.domainVerifiedAt
+    ? `https://${site.domain}/`
+    : `${site.origin.replace(/\/$/, '')}/`
+}
+
+/** 判断某站点此刻是否该同步：从未同步过，或距上次成功同步已超过间隔 */
+export function shouldSync(params: {
+  lastSuccessAt: Date | null
+  now: Date
+  intervalHours: number
+}): boolean {
+  if (!params.lastSuccessAt) return true
+  const elapsed = params.now.getTime() - params.lastSuccessAt.getTime()
+  return elapsed >= params.intervalHours * 60 * 60 * 1000
+}
+
 export interface KeywordRow {
   query: string
   clicks: number
@@ -228,4 +256,105 @@ export async function dailyTotals(
     impressions: r._sum.impressions ?? 0,
     position: Number((r._avg.position ?? 0).toFixed(1)),
   }))
+}
+
+/**
+ * 自动同步：定期把所有已发布内容的站点的搜索表现拉回来。
+ *
+ * 手动触发做不到闭环——没人会每天去点一次同步按钮，
+ * 面板上的数据就会一直停在客户最后一次手动点击的那天。
+ * 只有自动回读，「发布后效果如何」才是持续可见的。
+ *
+ * 只同步有已发布内容的站点：没发布过任何内容的站点在 GSC 里
+ * 必然没有数据，同步只会白白消耗配额。
+ */
+export async function syncAllSites(params: {
+  prisma: PrismaClient
+  buildClient: () => Promise<GscClient>
+  intervalHours?: number
+  days?: number
+  now?: Date
+}): Promise<{ synced: number; skipped: number; failed: number }> {
+  const { prisma } = params
+  const now = params.now ?? new Date()
+  const intervalHours = params.intervalHours ?? 24
+  const result = { synced: 0, skipped: 0, failed: 0 }
+
+  const sites = await prisma.site.findMany({
+    where: { archivedAt: null, contents: { some: { status: 'published' } } },
+    select: { id: true, origin: true, domain: true, domainVerifiedAt: true },
+  })
+  if (sites.length === 0) return result
+
+  let client: GscClient
+  try {
+    client = await params.buildClient()
+  } catch {
+    // 凭据无效时整轮跳过，等待配置修好后的下一轮
+    return { ...result, failed: sites.length }
+  }
+
+  for (const site of sites) {
+    const last = await prisma.gscSyncJob.findFirst({
+      where: { siteId: site.id, status: 'succeeded' },
+      orderBy: { finishedAt: 'desc' },
+      select: { finishedAt: true },
+    })
+
+    if (!shouldSync({ lastSuccessAt: last?.finishedAt ?? null, now, intervalHours })) {
+      result.skipped += 1
+      continue
+    }
+
+    try {
+      const r = await syncSite({
+        prisma,
+        client,
+        siteId: site.id,
+        siteUrl: gscSiteUrl(site),
+        days: params.days ?? 28,
+        now,
+      })
+      // syncSite 内部已把失败写进 job 表，这里只做计数
+      if (r.error) result.failed += 1
+      else result.synced += 1
+    } catch {
+      // 单站失败不能影响其他站点
+      result.failed += 1
+    }
+  }
+
+  return result
+}
+
+/** 启动周期性搜索表现回读，返回停止函数 */
+export function startGscSyncWorker(params: {
+  prisma: PrismaClient
+  buildClient: () => Promise<GscClient>
+  /** 检查间隔：多久醒来看一次哪些站点该同步了 */
+  tickMs?: number
+  /** 单站同步间隔：GSC 数据按天更新，一天一次足够 */
+  intervalHours?: number
+}): () => void {
+  let running = false
+
+  const tick = async () => {
+    if (running) return // 防止上一轮未完成时并发执行
+    running = true
+    try {
+      await syncAllSites({
+        prisma: params.prisma,
+        buildClient: params.buildClient,
+        intervalHours: params.intervalHours ?? 24,
+      })
+    } catch {
+      // 单次失败不应终止 worker
+    } finally {
+      running = false
+    }
+  }
+
+  const timer = setInterval(tick, params.tickMs ?? 60 * 60 * 1000)
+  timer.unref?.()
+  return () => clearInterval(timer)
 }

@@ -1,8 +1,9 @@
 import type { PrismaClient } from '@prisma/client'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
+import { annotateTrend, periodDelta } from '../../domain/insight/publish-events'
 import { listAudit } from '../../infrastructure/audit'
-import { dailyTotals, syncSite, topKeywords } from '../../infrastructure/gsc-sync'
+import { dailyTotals, gscSiteUrl, syncSite, topKeywords } from '../../infrastructure/gsc-sync'
 import { requireScope } from '../../lib/auth'
 import { ApiError } from '../../shared/errors'
 import { badRequest } from '../error-mapper'
@@ -143,8 +144,39 @@ export async function analyticsRoutes(
       })
       if (!site) throw new ApiError(404, 'NOT_FOUND', '站点不存在', {})
 
-      const rows = await dailyTotals(prisma, site.id, Math.min(Number(req.query.days) || 28, 90))
-      return reply.send({ data: rows, meta: { request_id: req.id, count: rows.length } })
+      const days = Math.min(Number(req.query.days) || 28, 90)
+      const rows = await dailyTotals(prisma, site.id, days)
+
+      // 叠加发布事件：平台独占发布时间戳，外部工具画不出「这次发布之后曲线怎么走」
+      const since = new Date()
+      since.setUTCDate(since.getUTCDate() - days)
+      const published = await prisma.content.findMany({
+        where: { siteId: site.id, status: 'published', publishedAt: { gte: since } },
+        // 用 path 而非标题：它同时是 GSC page 维度的取值，能把标注对上流量数据
+        select: { path: true, publishedAt: true },
+        orderBy: { publishedAt: 'asc' },
+      })
+
+      const byDate = new Map<string, { date: string; count: number; titles: string[] }>()
+      for (const c of published) {
+        if (!c.publishedAt) continue
+        const date = c.publishedAt.toISOString().slice(0, 10)
+        const e = byDate.get(date) ?? { date, count: 0, titles: [] }
+        e.count += 1
+        e.titles.push(c.path)
+        byDate.set(date, e)
+      }
+
+      const trend = annotateTrend(rows, [...byDate.values()])
+      return reply.send({
+        data: trend,
+        meta: {
+          request_id: req.id,
+          count: trend.length,
+          // 环比让用户一眼看出「比上个周期是涨是跌」，而不用自己比对折线
+          delta: periodDelta(rows),
+        },
+      })
     },
   )
 
@@ -204,10 +236,7 @@ export async function analyticsRoutes(
       if (!parsed.success) throw badRequest(parsed.error.issues)
 
       // 用实际生效的对外地址查询，与 Search Console 中登记的属性一致
-      const siteUrl =
-        site.domain && site.domainVerifiedAt
-          ? `https://${site.domain}/`
-          : `${site.origin.replace(/\/$/, '')}/`
+      const siteUrl = gscSiteUrl(site)
 
       const client = await buildGscClient(credentials)
       const result = await syncSite({
