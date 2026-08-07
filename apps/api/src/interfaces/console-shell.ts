@@ -10,63 +10,87 @@
 
 export const CONSOLE_STYLES = String.raw`
 :root{
-  --ink:#12161f;
-  --ink-soft:#1b2130;
-  --paper:#f4f6f9;
+  /* 取色自参考设计：浅色侧栏 + 冷调渐变主区，靠层次而非硬边框分隔 */
+  --side:#eceff5;
+  --side-active:#d4d9f2;
+  --side-text:#4a5468;
+  --paper:#f3f6f8;
   --surface:#fff;
-  --line:#e3e7ee;
+  --line:#e6eaf1;
   --text:#1a1f2b;
   --muted:#6b7688;
   --faint:#98a2b3;
-  --accent:#2f5fd8;
-  --accent-soft:#eaf0fe;
+  --accent:#1456d0;
+  --accent-soft:#e8eefc;
   --blocked:#c8322b;
   --blocked-soft:#fdeceb;
   --warn:#b4690e;
   --warn-soft:#fdf3e6;
-  --gain:#1f7a4d;
-  --gain-soft:#e8f5ee;
-  --radius:12px;
+  --gain:#10a248;
+  --gain-soft:#e6f7ed;
+  --radius:14px;
+  --shadow:0 1px 2px rgba(16,24,40,.04),0 4px 14px -6px rgba(16,24,40,.08);
+  --shadow-lift:0 2px 4px rgba(16,24,40,.05),0 10px 26px -10px rgba(16,24,40,.14);
   --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;
   --sans:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
 }
 @media(prefers-color-scheme:dark){
   :root{
+    --side:#161b26;--side-active:#1e2a4a;--side-text:#b9c1d1;
     --paper:#0d1117;--surface:#161b26;--line:#242b39;--text:#e6e9f0;
     --muted:#98a2b3;--faint:#6b7688;--accent:#5b8def;--accent-soft:#1a2540;
     --blocked-soft:#3a1d1b;--warn-soft:#3a2c14;--gain-soft:#14301f;
+    --shadow:0 1px 2px rgba(0,0,0,.3);
+    --shadow-lift:0 4px 18px -6px rgba(0,0,0,.5);
   }
 }
 *{box-sizing:border-box}
 html,body{height:100%}
-body{margin:0;background:var(--paper);color:var(--text);font:14px/1.6 var(--sans);
-  -webkit-font-smoothing:antialiased}
+/* 主区用冷调渐变而非平铺灰：参考设计里右上偏淡绿、左下偏蓝灰，
+   靠色温变化制造纵深，比纯色底更透气 */
+body{margin:0;color:var(--text);font:14px/1.6 var(--sans);
+  -webkit-font-smoothing:antialiased;
+  background:
+    radial-gradient(1200px 620px at 88% -6%, #e6f2ee 0%, transparent 62%),
+    radial-gradient(1000px 560px at 6% 104%, #e9eef7 0%, transparent 58%),
+    var(--paper);
+  background-attachment:fixed}
+@media(prefers-color-scheme:dark){
+  body{background:
+    radial-gradient(1200px 620px at 88% -6%, #14202b 0%, transparent 62%),
+    radial-gradient(1000px 560px at 6% 104%, #141a2a 0%, transparent 58%),
+    var(--paper)}
+}
 button,input,select,textarea{font:inherit;color:inherit}
 
 /* ── 布局骨架 ── */
 .app{display:grid;grid-template-columns:232px 1fr;min-height:100vh}
-.side{background:var(--ink);color:#e8ebf2;display:flex;flex-direction:column;
-  position:sticky;top:0;height:100vh;overflow-y:auto}
+/* 浅色侧栏：与主区同色系，靠细微色差和选中态区分，不再是割裂的深色块 */
+.side{background:var(--side);color:var(--side-text);display:flex;flex-direction:column;
+  position:sticky;top:0;height:100vh;overflow-y:auto;
+  border-right:1px solid rgba(16,24,40,.06)}
 .brand{display:flex;align-items:center;gap:10px;padding:20px 18px 22px;
-  font-weight:680;font-size:16px;letter-spacing:-.01em}
+  font-weight:680;font-size:16px;letter-spacing:-.01em;color:var(--text)}
 .brand svg{width:26px;height:26px;flex:none}
 .nav-group{padding:0 10px 4px}
 .nav-label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;
-  color:#6b7688;padding:14px 10px 6px;font-weight:600}
+  color:var(--faint);padding:14px 10px 6px;font-weight:600}
 .nav-item{display:flex;align-items:center;gap:10px;width:100%;
-  padding:9px 11px;border:0;background:transparent;color:#b9c1d1;
-  border-radius:9px;cursor:pointer;font-size:14px;text-align:left;
-  transition:background .12s,color .12s}
-.nav-item:hover{background:#1e2534;color:#fff}
-.nav-item[aria-current="page"]{background:var(--accent);color:#fff;font-weight:560}
+  padding:10px 12px;border:0;background:transparent;color:var(--side-text);
+  border-radius:11px;cursor:pointer;font-size:14px;text-align:left;
+  transition:background .14s,color .14s}
+.nav-item:hover{background:rgba(20,86,208,.06);color:var(--text)}
+/* 选中态用淡蓝底 + 蓝字，比纯色填充轻，也更好读 */
+.nav-item[aria-current="page"]{background:var(--side-active);color:var(--accent);
+  font-weight:600}
 .nav-item .ic{width:17px;height:17px;flex:none;opacity:.9}
 .nav-item .badge{margin-left:auto;font:600 11px/1 var(--mono);
   background:var(--blocked);color:#fff;padding:3px 6px;border-radius:20px}
-.side-foot{margin-top:auto;padding:14px 18px;border-top:1px solid #232a39;
-  font-size:12px;color:#8892a4}
-.side-foot button{background:none;border:0;color:#8892a4;cursor:pointer;
+.side-foot{margin-top:auto;padding:16px 18px;border-top:1px solid rgba(16,24,40,.07);
+  font-size:12px;color:var(--muted)}
+.side-foot button{background:none;border:0;color:var(--muted);cursor:pointer;
   padding:0;font-size:12px;text-decoration:underline;text-underline-offset:3px}
-.side-foot button:hover{color:#fff}
+.side-foot button:hover{color:var(--accent)}
 
 .main{min-width:0;display:flex;flex-direction:column}
 .topbar{display:flex;align-items:center;gap:14px;padding:18px 26px 0;flex-wrap:wrap}
@@ -75,23 +99,24 @@ button,input,select,textarea{font:inherit;color:inherit}
 .content{padding:18px 26px 40px;flex:1}
 
 /* ── 通用块 ── */
-.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius)}
+/* 卡片用柔和阴影而非硬边框：参考设计里所有容器都是「浮起」而非「框住」 */
+.panel{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow)}
 .panel-head{padding:14px 18px;border-bottom:1px solid var(--line);
   display:flex;align-items:center;gap:12px}
 .panel-head h2{margin:0;font-size:14px;font-weight:620}
 .panel-body{padding:18px}
 .toolbar{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-bottom:16px;
-  background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
-  padding:11px 13px}
+  background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);
+  padding:12px 14px}
 .toolbar input,.toolbar select{background:var(--paper);border:1px solid var(--line);
-  border-radius:8px;padding:7px 11px;font-size:13px;min-width:150px}
+  border-radius:10px;padding:8px 12px;font-size:13px;min-width:150px}
 .toolbar input:focus,.toolbar select:focus{outline:2px solid var(--accent);outline-offset:-1px}
 
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;
-  padding:7px 14px;border-radius:8px;border:1px solid var(--line);
+  padding:8px 15px;border-radius:10px;border:1px solid var(--line);
   background:var(--surface);cursor:pointer;font-size:13px;font-weight:520;
-  transition:.12s;white-space:nowrap}
-.btn:hover{border-color:var(--muted)}
+  transition:.14s;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
 .btn.pri{background:var(--accent);color:#fff;border-color:var(--accent)}
 .btn.pri:hover{filter:brightness(1.08)}
 .btn.sm{padding:5px 10px;font-size:12px}
@@ -101,8 +126,9 @@ button,input,select,textarea{font:inherit;color:inherit}
 /* ── 指标卡 ── */
 .metrics{display:grid;gap:13px;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));
   margin-bottom:18px}
-.metric{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
-  padding:15px 17px}
+.metric{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);
+  padding:16px 18px;transition:box-shadow .16s,transform .16s}
+.metric:hover{box-shadow:var(--shadow-lift)}
 .metric .k{font-size:11.5px;color:var(--muted);text-transform:uppercase;
   letter-spacing:.06em;font-weight:600;margin-bottom:7px}
 .metric .v{font:680 27px/1.1 var(--mono);letter-spacing:-.02em}
@@ -110,10 +136,11 @@ button,input,select,textarea{font:inherit;color:inherit}
 
 /* ── 内容卡片网格 ── */
 .grid{display:grid;gap:13px;grid-template-columns:repeat(auto-fill,minmax(310px,1fr))}
-.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
-  padding:16px;display:flex;flex-direction:column;gap:12px;transition:.14s}
-.card:hover{border-color:var(--accent);box-shadow:0 3px 14px -6px rgba(20,30,60,.16)}
-.card.is-blocked{border-left:3px solid var(--blocked)}
+.card{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);
+  padding:17px;display:flex;flex-direction:column;gap:12px;transition:.16s}
+/* hover 用描边+浮起，与参考图里选中卡的蓝色描边一致 */
+.card:hover{box-shadow:var(--shadow-lift),0 0 0 1.5px var(--accent)}
+.card.is-blocked{box-shadow:var(--shadow),inset 3px 0 0 var(--blocked)}
 .card-top{display:flex;align-items:flex-start;gap:12px}
 .card-id{min-width:0;flex:1}
 .card-id .path{font:600 13.5px/1.4 var(--mono);word-break:break-all;margin-bottom:4px}
@@ -179,9 +206,9 @@ code{font-family:var(--mono);font-size:12px;background:var(--paper);
 .ob-now b{color:var(--accent)}
 
 /* 健康分主视觉：环形 + 分布 + 走势并排，参考 Ahrefs Site Audit 概览 */
-.hero-health{display:grid;grid-template-columns:auto 1fr;gap:30px;align-items:center;
-  background:var(--surface);border:1px solid var(--line);border-radius:14px;
-  padding:22px 26px;margin-bottom:16px}
+.hero-health{display:grid;grid-template-columns:auto 1fr;gap:32px;align-items:center;
+  background:var(--surface);border-radius:16px;box-shadow:var(--shadow);
+  padding:24px 28px;margin-bottom:16px}
 .ring-wrap{flex:none;display:flex;align-items:center;justify-content:center;
   width:132px;height:132px}
 .ring-wrap svg{width:100%;height:100%}
@@ -298,7 +325,7 @@ label input:focus,label select:focus,label textarea:focus{
 /* ── 登录 ── */
 .login{min-height:100vh;display:grid;place-items:center;padding:22px}
 .login-box{width:100%;max-width:352px;background:var(--surface);
-  border:1px solid var(--line);border-radius:14px;padding:30px 28px}
+  border-radius:16px;box-shadow:var(--shadow-lift);padding:32px 30px}
 .login-box .brand{padding:0 0 20px;color:var(--text)}
 .login-box h2{margin:0 0 5px;font-size:18px;font-weight:650}
 .login-box .hint{color:var(--muted);font-size:12.5px;margin:0 0 20px}
