@@ -18,6 +18,7 @@ import { consoleRoutes } from './interfaces/console'
 import { publicSiteRoutes } from './interfaces/public-site'
 import { dashboardRoutes } from './interfaces/dashboard'
 import { docsRoutes } from './interfaces/docs'
+import { skillsRoutes } from './interfaces/skills'
 import { landingRoutes } from './interfaces/landing'
 import { contentRoutes } from './interfaces/routes/contents'
 import { GSC_WRITE_SCOPE } from './infrastructure/gsc-sitemap'
@@ -146,6 +147,7 @@ export async function buildServer(env: Env, prisma: PrismaClient): Promise<Fasti
   // 开发者文档（技术子页，不在首页主推）
   await app.register(async (scoped) => {
     await docsRoutes(scoped, listRules().length)
+    await skillsRoutes(scoped, listRules().length)
   })
 
   // 可视化面板与管理控制台

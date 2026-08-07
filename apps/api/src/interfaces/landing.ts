@@ -266,6 +266,7 @@ footer a:hover{color:var(--fg)}
     <a href="#flow">工作方式</a>
     <a href="#faq">常见问题</a>
     <a href="/docs">开发者</a>
+    <a href="/skills">AI Agent</a>
   </nav>
   <a class="btn primary" href="/console">进入控制台</a>
 </div></header>
@@ -378,6 +379,7 @@ footer a:hover{color:var(--fg)}
   <span>
     <a href="/console">控制台</a>
     <a href="/docs">开发者文档</a>
+    <a href="/skills">AI Agent 接入</a>
     <a href="/api/v1/rules">规则清单</a>
   </span>
 </div></footer>

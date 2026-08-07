@@ -155,7 +155,7 @@ footer a{color:var(--muted);text-decoration:none;margin-left:18px}
     </svg>
     RankLoop
   </a>
-  <nav><a href="/">首页</a><a href="/console">控制台</a></nav>
+  <nav><a href="/">首页</a><a href="/skills">AI Agent</a><a href="/console">控制台</a></nav>
 </div></header>
 
 <div class="wrap">
