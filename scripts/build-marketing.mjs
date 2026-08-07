@@ -115,7 +115,15 @@ if (existsSync('docs/images')) {
 
 // sitemap 需要包含新增页面，否则 Google 发现不了
 const today = new Date().toISOString().slice(0, 10)
-const paths = ['/', '/docs/', '/skills/', '/getting-started/', '/rules/']
+const paths = [
+  '/',
+  '/docs/',
+  '/skills/',
+  '/getting-started/',
+  '/rules/',
+  '/why-not-indexed/',
+  '/publish-gate/',
+]
 writeFileSync(
   join(OUT, 'sitemap.xml'),
   `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${paths

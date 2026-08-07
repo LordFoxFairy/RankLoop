@@ -15,6 +15,14 @@
     {
       "label": "规则清单",
       "href": "/rules"
+    },
+    {
+      "label": "收录排查",
+      "href": "/why-not-indexed"
+    },
+    {
+      "label": "发布门槛",
+      "href": "/publish-gate"
     }
   ],
   "home": {
