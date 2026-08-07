@@ -67,7 +67,17 @@ export async function contentDetailRoutes(
             effort: i.effort,
             blocking: i.blocking,
           })),
-          impact,
+          // 显式转成 snake_case：领域对象是 camelCase，直接透传会让
+          // 同一个概念在 /contents 叫 blocking_count、这里叫 blockingCount，
+          // 接入方必须记两套拼写。对外契约统一用 snake_case。
+          impact: {
+            current: impact.current,
+            potential: impact.potential,
+            quick_win: impact.quickWin,
+            quick_minutes: impact.quickMinutes,
+            blocking_count: impact.blockingCount,
+            total_minutes: impact.totalMinutes,
+          },
         },
         meta: { request_id: req.id, count: items.length },
       })

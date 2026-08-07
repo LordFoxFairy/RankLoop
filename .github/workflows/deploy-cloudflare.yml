@@ -38,7 +38,10 @@ jobs:
         env:
           SITE_URL: ${{ vars.SITE_URL || 'https://rankloop.pages.dev' }}
           SITE_NAME: ${{ vars.SITE_NAME || 'RankLoop SEO' }}
-        run: node apps/static-site/dist/cli.js
+        run: |
+          npm run build --workspace @rankloop/api
+          node apps/static-site/dist/cli.js
+          node scripts/build-marketing.mjs
 
       # 验证文件随站点一起部署，Google 才能抓到它完成所有权验证
       - name: 写入 Google 验证文件

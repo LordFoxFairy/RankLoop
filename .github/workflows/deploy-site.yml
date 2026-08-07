@@ -57,7 +57,10 @@ jobs:
         env:
           SITE_URL: ${{ steps.vars.outputs.site_url }}
           SITE_NAME: ${{ vars.SITE_NAME || github.event.repository.name }}
-        run: node apps/static-site/dist/cli.js
+        run: |
+          npm run build --workspace @rankloop/api
+          node apps/static-site/dist/cli.js
+          node scripts/build-marketing.mjs
 
       # 验证文件必须随站点一起部署，Google 才能抓到它完成所有权验证
       - name: 写入 Google 验证文件

@@ -98,7 +98,8 @@ export function renderDocs(ruleCount: number): string {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <title>开发者文档 — RankLoop</title>
-<meta name="description" content="RankLoop 接入说明：提交内容、获取 ${ruleCount} 条规则的检测结果、修复后重新提交并发布。">
+<meta name="description" content="RankLoop 接入文档：用 API Key 提交内容，立即获得 ${ruleCount} 条 SEO 规则的检测结果与修复建议，修复后重新提交并发布，达标内容自动进入 sitemap。">
+<link rel="canonical" href="/docs">
 <style>
 :root{color-scheme:light dark;--fg:#0d1117;--bg:#fff;--muted:#5b6472;--line:#e6e9ee;
  --surface:#f7f8fa;--accent:#1a5fd0;--ok:#067647;--warn:#b54708;--crit:#b42318;--max:900px}
