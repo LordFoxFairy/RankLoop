@@ -83,36 +83,65 @@ export async function statsRoutes(app: FastifyInstance, prisma: PrismaClient): P
     })
   })
 
-  /** 分数趋势：按天聚合，供面板画折线 */
-  app.get('/stats/trend', { preHandler: requireScope('contents:read') }, async (req, reply) => {
-    const { workspaceId } = req.auth!
-    const days = 30
-    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+  /**
+   * 分数趋势：按天聚合，供面板画折线。
+   *
+   * 每天取「该内容当天最后一次检测」再求均值，而非把当天所有检测
+   * 一起平均——同一篇内容修了五次会被计五次，让曲线反映的是
+   * 修改频率而不是质量。这也让趋势与总览的口径一致。
+   */
+  app.get<{ Querystring: { days?: string } }>(
+    '/stats/trend',
+    { preHandler: requireScope('contents:read') },
+    async (req, reply) => {
+      const { workspaceId } = req.auth!
+      const days = Math.min(Math.max(Number(req.query.days) || 30, 7), 90)
+      const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+      const scope = req.user?.isPlatformAdmin ? {} : { site: { workspaceId } }
 
-    const checks = await prisma.contentCheck.findMany({
-      where: { version: { content: { site: { workspaceId } } }, createdAt: { gte: since } },
-      orderBy: { createdAt: 'asc' },
-      select: { score: true, criticalCount: true, createdAt: true },
-    })
+      const checks = await prisma.contentCheck.findMany({
+        where: { version: { content: scope }, createdAt: { gte: since } },
+        orderBy: { createdAt: 'asc' },
+        select: {
+          score: true,
+          criticalCount: true,
+          createdAt: true,
+          version: { select: { contentId: true } },
+        },
+      })
 
-    const byDay = new Map<string, { total: number; count: number; critical: number }>()
-    for (const c of checks) {
-      const day = c.createdAt.toISOString().slice(0, 10)
-      const entry = byDay.get(day) ?? { total: 0, count: 0, critical: 0 }
-      entry.total += c.score
-      entry.count += 1
-      entry.critical += c.criticalCount
-      byDay.set(day, entry)
-    }
+      // 先按「日期 + 内容」折叠，保留当天最后一次检测
+      const perDayContent = new Map<string, { score: number; critical: number }>()
+      for (const c of checks) {
+        const day = c.createdAt.toISOString().slice(0, 10)
+        perDayContent.set(`${day}|${c.version.contentId}`, {
+          score: c.score,
+          critical: c.criticalCount,
+        })
+      }
 
-    return reply.send({
-      data: [...byDay.entries()].map(([date, v]) => ({
-        date,
-        average_score: Math.round(v.total / v.count),
-        checks: v.count,
-        critical: v.critical,
-      })),
-      meta: { request_id: req.id, days },
-    })
-  })
+      const byDay = new Map<string, { total: number; count: number; critical: number }>()
+      for (const [key, v] of perDayContent) {
+        const day = key.split('|')[0]
+        const entry = byDay.get(day) ?? { total: 0, count: 0, critical: 0 }
+        entry.total += v.score
+        entry.count += 1
+        entry.critical += v.critical
+        byDay.set(day, entry)
+      }
+
+      return reply.send({
+        data: [...byDay.entries()]
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([date, v]) => ({
+            date,
+            average_score: Math.round(v.total / v.count),
+            // 语义是「当天有多少篇内容」，不是「跑了多少次检测」
+            contents: v.count,
+            critical: v.critical,
+          })),
+        meta: { request_id: req.id, days },
+      })
+    },
+  )
 }
