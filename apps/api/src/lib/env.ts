@@ -50,6 +50,15 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
         `生产环境不得使用示例密钥：${offenders.join(', ')}。请生成随机值，例如 openssl rand -base64 32`,
       )
     }
+
+    // APP_URL 决定 canonical 与 og:image。留着示例域名会让 Google
+    // 把权重转给 example.com——这是静默且严重的 SEO 损害，必须拦在启动前。
+    if (/example\.(com|org|net)|localhost/.test(env.APP_URL)) {
+      throw new Error(
+        `生产环境的 APP_URL 不能是示例或本地地址（当前：${env.APP_URL}）。` +
+          'canonical 与社交分享图由它生成，指向错误域名会损害 SEO。',
+      )
+    }
   }
 
   return env

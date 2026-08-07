@@ -46,9 +46,41 @@ describe('环境变量校验', () => {
     ).not.toThrow()
   })
 
+  it('生产环境使用示例域名必须启动失败', () => {
+    // APP_URL 决定 canonical 与 og:image。留着示例域名会让 Google
+    // 把权重转给 example.com——静默且严重，必须拦在启动前。
+    expect(() =>
+      loadEnv({
+        ...valid,
+        NODE_ENV: 'production',
+        APP_URL: 'https://seo.example.com',
+      } as NodeJS.ProcessEnv),
+    ).toThrow(/APP_URL/)
+  })
+
+  it('生产环境不接受 localhost 作为对外地址', () => {
+    expect(() =>
+      loadEnv({
+        ...valid,
+        NODE_ENV: 'production',
+        APP_URL: 'http://localhost:3000',
+      } as NodeJS.ProcessEnv),
+    ).toThrow(/APP_URL/)
+  })
+
+  it('开发环境允许示例域名，便于本地调试', () => {
+    expect(() =>
+      loadEnv({ ...valid, APP_URL: 'https://seo.example.com' } as NodeJS.ProcessEnv),
+    ).not.toThrow()
+  })
+
   it('生产环境使用随机密钥可正常启动', () => {
     expect(() =>
-      loadEnv({ ...valid, NODE_ENV: 'production' } as NodeJS.ProcessEnv),
+      loadEnv({
+        ...valid,
+        NODE_ENV: 'production',
+        APP_URL: 'https://rankloop.miaokit.cloud',
+      } as NodeJS.ProcessEnv),
     ).not.toThrow()
   })
 })
