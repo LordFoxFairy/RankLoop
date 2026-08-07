@@ -24,6 +24,18 @@ import { contentUrl } from '../shared/url'
  * 因此更换 HTTP 框架、或从队列里触发同一用例，都不影响业务语义。
  */
 
+/**
+ * 发布后的搜索引擎通知端口。
+ *
+ * 发布却不通知搜索引擎，闭环就断在最后一步——
+ * 指望客户发布完再单独调一次提交接口是不现实的。
+ * 定义成端口而非直接依赖 Prisma，保持应用层可测。
+ */
+export interface IndexNotifier {
+  /** 通知内容已上线；失败不应影响发布本身 */
+  contentPublished(params: { siteId: string; url: string }): Promise<void>
+}
+
 export interface ContentServiceDeps {
   contents: ContentRepository
   sites: SiteRepository
@@ -31,6 +43,8 @@ export interface ContentServiceDeps {
   checker: ContentChecker
   ids: IdGenerator
   clock: Clock
+  /** 可选：未配置时发布照常进行，只是不主动通知 */
+  notifier?: IndexNotifier
 }
 
 export interface SubmitInput {
@@ -133,6 +147,21 @@ export class ContentService {
 
     content.publish(result.check, this.deps.clock.now())
     await this.deps.contents.save(content)
+
+    // 发布成功后主动通知搜索引擎。放在 save 之后：
+    // 内容尚未落库就通知，爬虫来了会抓到 404。
+    if (this.deps.notifier) {
+      try {
+        await this.deps.notifier.contentPublished({
+          siteId: content.siteId,
+          url: contentUrl(site.origin, content.path.value),
+        })
+      } catch {
+        // 通知失败不能回滚发布——内容已经上线了，
+        // 谎称发布失败比漏一次通知更糟。补投由后台 worker 负责。
+      }
+    }
+
     return content
   }
 

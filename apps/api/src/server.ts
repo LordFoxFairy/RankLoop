@@ -22,6 +22,7 @@ import { landingRoutes } from './interfaces/landing'
 import { contentRoutes } from './interfaces/routes/contents'
 import { startGscSyncWorker } from './infrastructure/gsc-sync'
 import { startIndexNowWorker } from './infrastructure/indexnow-dispatcher'
+import { createIndexNotifier } from './infrastructure/prisma-index-notifier'
 import { indexingRoutes } from './interfaces/routes/indexing'
 import { analyticsRoutes } from './interfaces/routes/analytics'
 import { authRoutes, createSessionMiddleware } from './interfaces/routes/auth'
@@ -40,6 +41,8 @@ export function buildContentService(prisma: PrismaClient): ContentService {
     checker: seoChecker,
     ids: uuidGenerator,
     clock: systemClock,
+    // 发布即自动通知搜索引擎，不依赖客户再调一次提交接口
+    notifier: createIndexNotifier(prisma),
   })
 }
 
