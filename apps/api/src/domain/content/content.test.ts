@@ -99,9 +99,35 @@ describe('Content 聚合根 — 发布门槛', () => {
     expect(() => c.publish(check({ critical: 1 }), NOW)).toThrow(SeoGateNotPassed)
   })
 
-  it('重复发布被拒绝', () => {
+  it('内容没有变化时重复发布被拒绝', () => {
     const c = draft()
     c.publish(check(), NOW)
+    expect(() => c.publish(check(), NOW)).toThrow(ContentAlreadyPublished)
+  })
+
+  it('修订后可以再次发布——修复版本必须能上线', () => {
+    // 闭环的关键一步：客户按建议修好问题后，新版本要能替换线上的旧版本。
+    // 若拒绝，线上会永远停在有缺陷的那一版，「检测→修复→发布」断在最后。
+    const c = draft(check({ critical: 1 }))
+    expect(() => c.publish(check({ critical: 1 }), NOW)).toThrow(SeoGateNotPassed)
+
+    c.revise(version(check({ critical: 0 }), 2), 'html')
+    expect(() => c.publish(check({ critical: 0 }), NOW)).not.toThrow()
+    expect(c.status).toBe('published')
+  })
+
+  it('再次发布仍受门槛约束——修订不能成为绕过检测的通道', () => {
+    const c = draft()
+    c.publish(check(), NOW)
+    c.revise(version(check({ critical: 2 }), 2), 'html')
+    expect(() => c.publish(check({ critical: 2 }), NOW)).toThrow(SeoGateNotPassed)
+  })
+
+  it('发布后 pendingVersion 清空，避免无变化时被误判为可重发', () => {
+    const c = draft()
+    c.revise(version(check(), 2), 'html')
+    c.publish(check(), NOW)
+    expect(c.pendingVersion).toBeNull()
     expect(() => c.publish(check(), NOW)).toThrow(ContentAlreadyPublished)
   })
 })

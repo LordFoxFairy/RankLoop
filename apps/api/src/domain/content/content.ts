@@ -129,13 +129,21 @@ export class Content {
    * 不变式：存在 critical 问题时拒绝（ADR-001 §4）。
    * 以传入的检测结果为准而非历史结果——规则版本可能已更新，
    * 用陈旧结论放行等于绕过门槛。
+   *
+   * 已发布内容修订后可以再次发布：客户按建议修好问题，
+   * 修复版本必须能上线，否则线上永远停留在有缺陷的旧版本——
+   * 那会让「检测→修复→发布」的闭环断在最后一步。
+   * 只有内容确实没有变化时才拒绝，避免无意义的重复操作。
    */
   publish(check: SeoCheck, now: Date): void {
     this.assertNotArchived()
-    if (this._status === 'published') throw new ContentAlreadyPublished()
+    const isRepublish = this._status === 'published'
+    if (isRepublish && !this._pendingVersion) throw new ContentAlreadyPublished()
     if (!check.passesGate) throw new SeoGateNotPassed(check.blockingRules, check.score)
     this._status = 'published'
     this._publishedAt = now
+    // 已生效的版本不再是「待发布」，清空以便下次修订重新标记
+    this._pendingVersion = null
   }
 
   archive(): void {
