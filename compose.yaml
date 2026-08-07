@@ -28,6 +28,9 @@ services:
       # 初始管理员，由 seed 脚本读取
       INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:-admin@example.com}
       INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
+      # 配置后才会启动 Search Console 自动同步：提交 sitemap 并每日回读
+      # 点击/曝光/排名。缺了它，闭环止步于「发布」，看不到发布后的效果。
+      GSC_SERVICE_ACCOUNT: ${GSC_SERVICE_ACCOUNT:-}
       DEFAULT_MAX_SITES: ${DEFAULT_MAX_SITES:-5}
       DEFAULT_MAX_CONTENTS: ${DEFAULT_MAX_CONTENTS:-1000}
       DEFAULT_DAILY_INDEXNOW: ${DEFAULT_DAILY_INDEXNOW:-200}
