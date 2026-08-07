@@ -20,6 +20,7 @@ import { dashboardRoutes } from './interfaces/dashboard'
 import { docsRoutes } from './interfaces/docs'
 import { landingRoutes } from './interfaces/landing'
 import { contentRoutes } from './interfaces/routes/contents'
+import { GSC_WRITE_SCOPE } from './infrastructure/gsc-sitemap'
 import { startGscSyncWorker } from './infrastructure/gsc-sync'
 import { startIndexNowWorker } from './infrastructure/indexnow-dispatcher'
 import { createIndexNotifier } from './infrastructure/prisma-index-notifier'
@@ -215,12 +216,15 @@ async function main(): Promise<void> {
         return new JWT({
           email: creds.client_email,
           key: creds.private_key,
-          scopes: ['https://www.googleapis.com/auth/webmasters.readonly'],
+          // 写权限：只读 scope 无法提交 sitemap，而提交 sitemap 是
+          // 让 Google 更快发现新内容在 Google 侧唯一的主动手段
+          scopes: [GSC_WRITE_SCOPE],
         }) as never
       },
+      submitSitemap: true,
     })
     app.addHook('onClose', async () => stopGsc())
-    app.log.info('Search Console 自动同步已启用（每小时检查，每站每天同步一次）')
+    app.log.info('Search Console 自动同步已启用（每站每天提交 sitemap 并回读搜索表现）')
   } else {
     app.log.warn('未配置 GSC_SERVICE_ACCOUNT，搜索表现数据只能手动同步')
   }

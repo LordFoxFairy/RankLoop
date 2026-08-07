@@ -1,0 +1,20 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rankloop"
+version = "0.1.0"
+description = "RankLoop SEO 全生命周期平台的 Python 客户端"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+keywords = ["seo", "search-console", "indexnow", "content"]
+# 只用标准库，装了就能用，不引入依赖冲突
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["rankloop"]

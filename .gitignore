@@ -9,6 +9,13 @@ dist/
 *.tsbuildinfo
 .vite/
 
+# Python SDK 构建与缓存产物
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+
 # Logs
 npm-debug.log*
 yarn-debug.log*

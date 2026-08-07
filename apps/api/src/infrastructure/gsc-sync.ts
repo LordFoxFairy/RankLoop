@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@prisma/client'
+import { sitemapUrlFor, submitSitemap } from './gsc-sitemap'
 
 /**
  * Search Console 搜索表现同步。
@@ -274,6 +275,8 @@ export async function syncAllSites(params: {
   intervalHours?: number
   days?: number
   now?: Date
+  /** 是否同时提交 sitemap；需要 webmasters 写权限 */
+  submitSitemap?: boolean
 }): Promise<{ synced: number; skipped: number; failed: number }> {
   const { prisma } = params
   const now = params.now ?? new Date()
@@ -306,12 +309,21 @@ export async function syncAllSites(params: {
       continue
     }
 
+    const siteUrl = gscSiteUrl(site)
+
+    // 顺带提交 sitemap：Google 不支持 IndexNow，提交 sitemap 是
+    // 让 Google 更快发现新内容在 Google 侧唯一的主动手段。
+    // 失败不影响回读数据——两件事互相独立。
+    if (params.submitSitemap) {
+      await submitSitemap({ client, siteUrl, sitemapUrl: sitemapUrlFor(site.origin) })
+    }
+
     try {
       const r = await syncSite({
         prisma,
         client,
         siteId: site.id,
-        siteUrl: gscSiteUrl(site),
+        siteUrl,
         days: params.days ?? 28,
         now,
       })
@@ -335,6 +347,8 @@ export function startGscSyncWorker(params: {
   tickMs?: number
   /** 单站同步间隔：GSC 数据按天更新，一天一次足够 */
   intervalHours?: number
+  /** 是否顺带提交 sitemap；需要 webmasters 写权限 */
+  submitSitemap?: boolean
 }): () => void {
   let running = false
 
@@ -346,6 +360,7 @@ export function startGscSyncWorker(params: {
         prisma: params.prisma,
         buildClient: params.buildClient,
         intervalHours: params.intervalHours ?? 24,
+        submitSitemap: params.submitSitemap,
       })
     } catch {
       // 单次失败不应终止 worker
