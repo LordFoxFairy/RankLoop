@@ -135,18 +135,32 @@ const HTML = String.raw`<!doctype html>
                 </template>
               </div>
 
-              <div class="hd-row" style="margin-top:14px">
-                <span class="hd-k">近 30 天走势</span>
-                <template x-if="scoreDelta() !== null">
-                  <span class="hd-v" :style="'color:'+(scoreDelta()>=0?'var(--gain)':'var(--blocked)')"
-                        x-text="(scoreDelta()>=0?'+':'')+scoreDelta()+' 分'"></span>
-                </template>
-                <template x-if="scoreDelta() === null">
-                  <span class="hd-v" style="color:var(--muted);font-weight:400">需要两天数据</span>
-                </template>
-              </div>
+              <!-- 有历史就画走势；只有一天数据时改为「修完能到多少分」，
+                   那是当下就能算出来的、有行动价值的信息 -->
               <template x-if="scoreTrend.length >= 2">
-                <div x-html="scoreSparkline()"></div>
+                <div>
+                  <div class="hd-row" style="margin-top:14px">
+                    <span class="hd-k">近 30 天走势</span>
+                    <span class="hd-v" :style="'color:'+(scoreDelta()>=0?'var(--gain)':'var(--blocked)')"
+                          x-text="(scoreDelta()>=0?'+':'')+scoreDelta()+' 分'"></span>
+                  </div>
+                  <div x-html="scoreSparkline()"></div>
+                </div>
+              </template>
+              <template x-if="scoreTrend.length < 2">
+                <div class="potential">
+                  <div class="pt-row">
+                    <span class="hd-k">全部修完可达</span>
+                    <span class="pt-v" x-text="potentialScore()+' 分'"></span>
+                  </div>
+                  <div class="pt-bar">
+                    <div class="pt-now" :style="'width:'+(stats.health?.average_score ?? 0)+'%'"></div>
+                    <div class="pt-gain" :style="'width:'+(potentialScore()-(stats.health?.average_score ?? 0))+'%'"></div>
+                  </div>
+                  <div class="pt-note" x-show="totalFixMinutes()"
+                       x-text="'修完全部 '+(stats.top_issues?.length ?? 0)+' 类问题约需 '+fmtMinutes(totalFixMinutes())"></div>
+                  <div class="pt-note" x-show="!totalFixMinutes()">所有内容均已达标</div>
+                </div>
               </template>
             </div>
           </div>
@@ -848,6 +862,20 @@ function app() {
     impactWidth(i) {
       const total = this.stats.contents?.total || 1
       return Math.max(3, Math.min(100, (i.count / total) * 100)).toFixed(1)
+    },
+
+    /** 全部修完能到的分数：上限 100 */
+    potentialScore() {
+      const now = this.stats.health?.average_score ?? 0
+      const total = this.stats.contents?.total || 1
+      // 每类问题的可挽回分摊到全部内容上，才是均分能提升的幅度
+      const gain = (this.stats.top_issues || []).reduce((s, i) => s + i.recoverable, 0) / total
+      return Math.min(100, Math.round(now + gain))
+    },
+
+    /** 修完全部问题的预估总耗时 */
+    totalFixMinutes() {
+      return (this.stats.top_issues || []).reduce((s, i) => s + i.minutes, 0)
     },
 
     /** 影响面文案：给条形一个可读的说明 */

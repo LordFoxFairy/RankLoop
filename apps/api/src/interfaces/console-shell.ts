@@ -216,6 +216,15 @@ code{font-family:var(--mono);font-size:12px;background:var(--paper);
 .issue-meta{display:flex;gap:12px;flex-wrap:wrap;margin-top:4px;
   font-size:11.5px;color:var(--muted)}
 .issue-meta code{font-family:var(--mono);font-size:11px;opacity:.75}
+/* 潜力分：当前分 + 修完能涨多少，参考 Conductor 的 headroom 叠加显示 */
+.potential{margin-top:14px}
+.pt-row{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:7px}
+.pt-v{font:680 15px/1 var(--mono);color:var(--gain)}
+.pt-bar{display:flex;height:9px;border-radius:5px;overflow:hidden;background:var(--line)}
+.pt-now{background:var(--accent)}
+.pt-gain{background:var(--gain);opacity:.42}
+.pt-note{font-size:12px;color:var(--muted);margin-top:7px}
+
 /* 发布之后：闭环后半段的紧凑展示，与「下一步该修什么」并列 */
 .search-strip{margin-bottom:16px}
 .ss-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
