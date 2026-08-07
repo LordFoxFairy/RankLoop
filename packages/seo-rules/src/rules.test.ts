@@ -25,7 +25,9 @@ function validDoc(overrides: Partial<SeoDocument> = {}): SeoDocument {
         { href: '/third', internal: true },
         { href: 'https://external.com', internal: false },
       ],
-      text: '正文内容详细说明这一主题。'.repeat(40),
+      // 正文与标题同主题：真实页面如此。用无意义填充词会触发
+      // TITLE_TOPIC_MISMATCH——那是规则在正确工作
+      text: '优化网站的搜索引擎排名需要关注标题撰写与内链建设。'.repeat(30),
     },
     jsonLd: ['{"@context":"https://schema.org","@type":"Article"}'],
     statusCode: 200,

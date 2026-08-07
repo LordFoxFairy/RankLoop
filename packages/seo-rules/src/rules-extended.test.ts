@@ -22,8 +22,12 @@ function doc(overrides: Partial<SeoDocument> = {}): SeoDocument {
       links: [
         { href: '/x', internal: true, text: 'SEO 优化指南' },
         { href: '/y', internal: true, text: '关键词研究方法' },
+        // 长文需要外部引用，否则触发 NO_EXTERNAL_REFERENCES
+        { href: 'https://developers.google.com/search', internal: false, text: 'Google 搜索文档' },
       ],
-      text: '正文内容详细说明。'.repeat(60),
+      // 正文须与标题同主题：真实页面如此，用无意义填充词会触发
+      // TITLE_TOPIC_MISMATCH——那是规则在正确工作，不是误报
+      text: '优化网站的搜索引擎排名需要从标题、描述与内链三方面入手。'.repeat(30),
     },
     jsonLd: ['{"@type":"Article"}'],
     statusCode: 200,
@@ -227,5 +231,81 @@ describe('MISSING_STRUCTURED_DATA', () => {
     const issues = runRules(doc({ jsonLd: ['{bad json'] })).issues
     expect(issues.find((i) => i.code === 'INVALID_JSON_LD')).toBeTruthy()
     expect(issues.find((i) => i.code === 'MISSING_STRUCTURED_DATA')).toBeUndefined()
+  })
+})
+
+describe('TITLE_TOPIC_MISMATCH', () => {
+  it('标题与正文开头无关时提示——这是内容排不上去的常见原因', () => {
+    const issues = runRules(
+      doc({
+        head: { title: '深度学习模型训练技巧' },
+        body: {
+          headings: [{ level: 1, text: '深度学习模型训练技巧' }],
+          images: [],
+          links: [],
+          text: '本文讨论烘焙面包的发酵温度控制与面团含水量比例。'.repeat(10),
+        },
+      }),
+    ).issues
+    expect(issues.find((i) => i.code === 'TITLE_TOPIC_MISMATCH')).toBeTruthy()
+  })
+
+  it('标题词出现在正文开头时不提示', () => {
+    const issues = runRules(
+      doc({
+        head: { title: '深度学习模型训练技巧' },
+        body: {
+          headings: [{ level: 1, text: '深度学习模型训练技巧' }],
+          images: [],
+          links: [],
+          text: '深度学习模型训练需要注意学习率、批量大小与正则化技巧。'.repeat(10),
+        },
+      }),
+    ).issues
+    expect(issues.find((i) => i.code === 'TITLE_TOPIC_MISMATCH')).toBeUndefined()
+  })
+
+  it('缺 title 或 H1 时跳过——由对应规则报告，不重复告警', () => {
+    const issues = runRules(
+      doc({ head: {}, body: { headings: [], images: [], links: [], text: '正文'.repeat(50) } }),
+    ).issues
+    expect(issues.find((i) => i.code === 'TITLE_TOPIC_MISMATCH')).toBeUndefined()
+  })
+})
+
+describe('NO_EXTERNAL_REFERENCES', () => {
+  it('长文没有外链时提示——缺少可信度信号', () => {
+    const issues = runRules(
+      doc({
+        body: {
+          headings: [{ level: 1, text: '测试' }],
+          images: [],
+          links: [{ href: '/a', internal: true, text: '站内链接' }],
+          text: '这是一篇很长的文章内容用于测试外部引用检测规则的触发条件。'.repeat(40),
+        },
+      }),
+    ).issues
+    expect(issues.find((i) => i.code === 'NO_EXTERNAL_REFERENCES')).toBeTruthy()
+  })
+
+  it('有外链时不提示', () => {
+    const issues = runRules(
+      doc({
+        body: {
+          headings: [{ level: 1, text: '测试' }],
+          images: [],
+          links: [{ href: 'https://example.org/spec', internal: false, text: '官方文档' }],
+          text: '这是一篇很长的文章内容用于测试外部引用检测规则的触发条件。'.repeat(40),
+        },
+      }),
+    ).issues
+    expect(issues.find((i) => i.code === 'NO_EXTERNAL_REFERENCES')).toBeUndefined()
+  })
+
+  it('短内容不适用——落地页没有引用是正常的', () => {
+    const issues = runRules(
+      doc({ body: { headings: [], images: [], links: [], text: '简短的落地页文案。' } }),
+    ).issues
+    expect(issues.find((i) => i.code === 'NO_EXTERNAL_REFERENCES')).toBeUndefined()
   })
 })

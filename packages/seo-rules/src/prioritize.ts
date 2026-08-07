@@ -39,6 +39,10 @@ const EFFORT_MINUTES: Record<string, number> = {
   INVALID_JSON_LD: 10,
   // 从零写一段 schema.org 标记比修语法错误更费时
   MISSING_STRUCTURED_DATA: 15,
+  // 改标题或调整开头段落，需要斟酌措辞
+  TITLE_TOPIC_MISMATCH: 10,
+  // 要先找到合适的权威来源
+  NO_EXTERNAL_REFERENCES: 12,
   FEW_INTERNAL_LINKS: 12,
   THIN_CONTENT: 25,
   EMPTY_CONTENT: 30,

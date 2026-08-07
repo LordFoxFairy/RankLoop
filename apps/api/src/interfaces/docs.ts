@@ -100,6 +100,11 @@ export function renderDocs(ruleCount: number): string {
 <title>开发者文档 — RankLoop</title>
 <meta name="description" content="RankLoop 接入文档：用 API Key 提交内容，立即获得 ${ruleCount} 条 SEO 规则的检测结果与修复建议，修复后重新提交并发布，达标内容自动进入 sitemap。">
 <link rel="canonical" href="/docs">
+<meta property="og:type" content="article">
+<meta property="og:title" content="开发者文档 — RankLoop">
+<meta property="og:description" content="RankLoop 接入文档：提交内容、获取检测结果、修复后发布。">
+<meta property="og:image" content="/img/og-cover.png">
+<meta name="twitter:card" content="summary_large_image">
 <script type="application/ld+json">${JSON.stringify({
   '@context': 'https://schema.org',
   '@type': 'TechArticle',
@@ -220,6 +225,15 @@ footer a{color:var(--muted);text-decoration:none;margin-left:18px}
   <div class="note">
     完整机器可读 schema：<a href="/api/v1/openapi.json">OpenAPI 3.1</a>，
     可直接导入 Postman 或用于生成客户端。
+  </div>
+
+  <div class="note">
+    检测规则依据
+    <a href="https://developers.google.com/search/docs/essentials" target="_blank"
+      rel="noopener noreferrer">Google 搜索基础规范</a>
+    与
+    <a href="https://schema.org/" target="_blank" rel="noopener noreferrer">schema.org</a>
+    结构化数据标准制定。收录与排名由 Google 决定，本平台只保证技术层面不拖后腿。
   </div>
 </div>
 

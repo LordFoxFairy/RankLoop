@@ -203,4 +203,81 @@ export const extendedRules: Rule[] = [
       }
     },
   },
+  {
+    /**
+     * 标题未包含正文主题词。
+     *
+     * Google 判断相关性的第一依据就是标题。标题写得再漂亮，
+     * 如果和正文讲的不是一回事，就匹配不上用户的搜索词——
+     * 这是「内容明明不错却排不上去」最常见的原因之一。
+     *
+     * 用 H1 与正文开头做交叉验证，而非猜关键词：
+     * 平台不做关键词研究，只检查内部一致性。
+     *
+     * 阈值取得很低（10%）：标题用同义词而非原词复述是正常写法，
+     * 阈值定高会把好内容误判成标题党。宁可漏报也不误报（§0 第 10 条）。
+     */
+    code: 'TITLE_TOPIC_MISMATCH',
+    severity: 'notice',
+    weight: 3,
+    evaluate(doc) {
+      const title = doc.head.title?.trim()
+      const h1 = doc.body.headings.find((h) => h.level === 1)?.text?.trim()
+      if (!title || !h1) return null
+
+      // 复用文件顶部的 tokenize（中文按字、西文按词）——
+      // 另写一套会让两条标题规则的判定口径悄悄分叉
+      const titleTokens = tokenize(title)
+      if (titleTokens.size === 0) return null
+      // 只取正文前 300 字：主题词应当在开头出现，埋在末尾说明结构有问题
+      const bodyTokens = tokenize(doc.body.text.slice(0, 300))
+      if (bodyTokens.size === 0) return null
+
+      // 正文过短时不判定：样本太小，比例没有意义
+      if (doc.body.text.length < 200) {
+        return { code: 'TITLE_TOPIC_MISMATCH', reason: '正文过短，无法判定主题一致性' }
+      }
+
+      const shared = [...titleTokens].filter((t) => bodyTokens.has(t))
+      const ratio = shared.length / titleTokens.size
+      // 完全无重合才提示：同义复述是正常写法，不能因此报警
+      if (ratio > 0.1) return null
+
+      return {
+        message: '标题与正文开头主题不一致，影响搜索相关性判定',
+        evidence: `标题中仅 ${Math.round(ratio * 100)}% 的词出现在正文开头`,
+        recommendation:
+          '让标题准确概括正文，并在开头段落自然出现标题中的核心词，' +
+          '避免标题党式的表述。',
+      }
+    },
+  },
+  {
+    /**
+     * 缺少出站引用。
+     *
+     * 引用权威来源是 E-E-A-T 的可见信号之一：Google 用它判断
+     * 内容是否有事实依据。一篇长文一个外链都没有，
+     * 往往意味着内容是凭空写的。
+     *
+     * 只对长文要求——短页面（如落地页）本来就不需要引用。
+     */
+    code: 'NO_EXTERNAL_REFERENCES',
+    severity: 'notice',
+    weight: 3,
+    evaluate(doc) {
+      // 短内容不适用：落地页、目录页没有引用是正常的
+      if (doc.body.text.length < 800) return null
+      const external = doc.body.links.filter((l) => !l.internal)
+      if (external.length > 0) return null
+
+      return {
+        message: '长文没有任何外部引用，缺少可信度信号',
+        evidence: `正文 ${doc.body.text.length} 字符，外链 0 个`,
+        recommendation:
+          '引用权威来源（官方文档、研究报告、行业标准）并链接过去，' +
+          '这是 Google 判断内容可信度的信号之一。',
+      }
+    },
+  },
 ]
