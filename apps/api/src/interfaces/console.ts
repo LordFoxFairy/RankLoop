@@ -802,6 +802,11 @@ function app() {
       const r = 42, c = 2 * Math.PI * r
       const dash = (s / 100) * c
       const col = this.scoreColor(score)
+      // 上一个数据点：有历史才画对比标记，只有一天数据时不编造变化
+      const t = this.scoreTrend || []
+      const prev = t.length >= 2 ? t[t.length - 2].average_score : null
+      const delta = prev === null || score === null || score === undefined
+        ? null : score - prev
       return '<svg viewBox="0 0 100 100" style="width:' + size + ';height:' + size + '" ' +
         'role="img" aria-label="健康分 ' + (score ?? '暂无') + '">' +
         '<circle cx="50" cy="50" r="' + r + '" fill="none" stroke="var(--line)" stroke-width="9"/>' +
@@ -809,10 +814,30 @@ function app() {
           '<circle cx="50" cy="50" r="' + r + '" fill="none" stroke="' + col + '" stroke-width="9" ' +
           'stroke-linecap="round" stroke-dasharray="' + dash.toFixed(1) + ' ' + c.toFixed(1) + '" ' +
           'transform="rotate(-90 50 50)"/>') +
-        '<text x="50" y="52" text-anchor="middle" dominant-baseline="middle" ' +
-        'font-size="30" font-weight="700" fill="' + col + '" ' +
+        // 上次位置标记：参考 Semrush Site Health 的红色三角，
+        // 一眼看出分数往哪个方向动、动了多少
+        (prev === null ? '' : (() => {
+          const a = (prev / 100) * 360 - 90
+          const rad = (a * Math.PI) / 180
+          const px = 50 + (r + 8) * Math.cos(rad)
+          const py = 50 + (r + 8) * Math.sin(rad)
+          return '<polygon points="' +
+            (px - 3.2).toFixed(1) + ',' + (py - 3.2).toFixed(1) + ' ' +
+            (px + 3.2).toFixed(1) + ',' + py.toFixed(1) + ' ' +
+            (px - 3.2).toFixed(1) + ',' + (py + 3.2).toFixed(1) +
+            '" fill="var(--faint)" transform="rotate(' + (a + 90).toFixed(1) +
+            ' ' + px.toFixed(1) + ' ' + py.toFixed(1) + ')">' +
+            '<title>上次 ' + prev + ' 分</title></polygon>'
+        })()) +
+        '<text x="50" y="' + (delta === null ? 52 : 48) + '" text-anchor="middle" ' +
+        'dominant-baseline="middle" font-size="30" font-weight="700" fill="' + col + '" ' +
         'font-family="ui-monospace,monospace">' + (score ?? '—') + '</text>' +
-        '<text x="50" y="70" text-anchor="middle" font-size="9" fill="var(--muted)">满分 100</text>' +
+        // 分数下方直接说明变化，不必另找地方看趋势（Semrush 的「no changes」）
+        '<text x="50" y="64" text-anchor="middle" font-size="8.5" ' +
+        'fill="' + (delta === null || delta === 0 ? 'var(--muted)' :
+                    delta > 0 ? 'var(--gain)' : 'var(--blocked)') + '">' +
+        (delta === null ? '满分 100' : delta === 0 ? '较上次无变化' :
+         (delta > 0 ? '↑ +' : '↓ ') + delta + ' 分') + '</text>' +
         '</svg>'
     },
 
