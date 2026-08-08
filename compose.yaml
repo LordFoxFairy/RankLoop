@@ -31,6 +31,9 @@ services:
       # 配置后才会启动 Search Console 自动同步：提交 sitemap 并每日回读
       # 点击/曝光/排名。缺了它，闭环止步于「发布」，看不到发布后的效果。
       GSC_SERVICE_ACCOUNT: ${GSC_SERVICE_ACCOUNT:-}
+      # Core Web Vitals 数据源。不配则不采集——面板会说明未配置，
+      # 而不是显示一排 0 让人以为性能极差。
+      CRUX_API_KEY: ${CRUX_API_KEY:-}
       DEFAULT_MAX_SITES: ${DEFAULT_MAX_SITES:-5}
       DEFAULT_MAX_CONTENTS: ${DEFAULT_MAX_CONTENTS:-1000}
       DEFAULT_DAILY_INDEXNOW: ${DEFAULT_DAILY_INDEXNOW:-200}

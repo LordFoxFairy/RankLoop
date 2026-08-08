@@ -245,6 +245,38 @@ const HTML = String.raw`<!doctype html>
             </template>
           </div>
 
+          <!-- 真实用户体验（Core Web Vitals）。
+               这三个数不是我们测的，是 Google 从真实 Chrome 用户收集的，
+               也是它排名时参考的同一份。平台只收到 HTML 文本，测不出这些值。 -->
+          <div class="panel search-strip">
+            <div class="panel-head"><h2>真实用户体验</h2>
+              <span class="sub" style="margin-left:auto;color:var(--muted);font-size:12px">
+                Core Web Vitals · 来自 Google CrUX</span></div>
+
+            <template x-if="vitals?.has_data">
+              <div class="ss-grid">
+                <template x-for="m in vitalMetrics()" :key="m.k">
+                  <div class="ss">
+                    <div class="ss-k" x-text="m.k"></div>
+                    <div class="ss-v" :style="'color:'+m.color" x-text="m.v"></div>
+                    <div class="ss-d" x-text="m.hint"></div>
+                  </div>
+                </template>
+              </div>
+            </template>
+
+            <!-- 三种状态分开说明。混为一谈只能显示一排 0，让人以为性能极差 -->
+            <template x-if="!vitals?.has_data">
+              <div class="ss-wait">
+                <span x-text="!vitals?.configured
+                  ? '未配置 CrUX API Key，不采集真实用户体验数据'
+                  : (vitals?.synced
+                      ? '已接通 CrUX，但 Google 尚未收集到足够样本。低流量页面属正常，通常需要站点有稳定访问量后才有数据。'
+                      : '尚未同步 CrUX 数据')"></span>
+              </div>
+            </template>
+          </div>
+
           <div class="panel">
             <div class="panel-head"><h2>下一步该修什么</h2></div>
 
@@ -793,7 +825,7 @@ function app() {
   return {
     me: null, error: '', notice: '', rulesCount: 0, tenants: [],
     perf: null, keywords: [], trend: [], searchDays: '28', syncing: false, auditRows: [],
-    scoreTrend: [], searchSummary: null,
+    scoreTrend: [], searchSummary: null, vitals: null,
     previewOpen: false, previewHtml: '', previewMeta: '',
     recs: [], impact: null,
     tab: 'overview', tabs: [
@@ -1067,6 +1099,8 @@ function app() {
         this.scoreTrend = await this.api('/stats/trend?days=30').catch(() => [])
         // 闭环后半段：发布之后的真实效果，总览页也该看得到
         this.searchSummary = await this.api('/stats/search').catch(() => null)
+        // 真实用户体验：Google CrUX 的 CWV，平台自己测不出来
+        this.vitals = await this.api('/stats/vitals').catch(() => null)
         this.sites = await this.enrichSites(await this.api('/sites'))
         this.keys = await this.api('/api-keys').catch(() => [])
         if (this.me?.is_platform_admin) {
@@ -1264,6 +1298,27 @@ function app() {
     posColor(p) {
       if (!p) return 'var(--muted)'
       return p <= 10 ? 'var(--gain)' : p <= 30 ? 'var(--warn)' : 'var(--blocked)'
+    },
+
+    /**
+     * CWV 三项指标。阈值取 Google 官方标准（web.dev），
+     * 用 p75 而非平均——Google 判定「好/需改进/差」用的就是 75 分位。
+     */
+    vitalMetrics() {
+      const s = (this.vitals?.sites || [])[0]
+      if (!s) return []
+      const rate = (v, good, poor) =>
+        v === null || v === undefined ? 'var(--muted)'
+          : v <= good ? 'var(--gain)' : v <= poor ? 'var(--warn)' : 'var(--blocked)'
+      const pct = (g) => (g === null || g === undefined ? '' : Math.round(g * 100) + '% 达标')
+      return [
+        { k: '加载速度 LCP', v: s.lcp_p75 === null ? '—' : (s.lcp_p75 / 1000).toFixed(2) + 's',
+          color: rate(s.lcp_p75, 2500, 4000), hint: pct(s.lcp_good) || '目标 ≤2.5s' },
+        { k: '交互响应 INP', v: s.inp_p75 === null ? '—' : Math.round(s.inp_p75) + 'ms',
+          color: rate(s.inp_p75, 200, 500), hint: pct(s.inp_good) || '目标 ≤200ms' },
+        { k: '视觉稳定 CLS', v: s.cls_p75 === null ? '—' : Number(s.cls_p75).toFixed(3),
+          color: rate(s.cls_p75, 0.1, 0.25), hint: pct(s.cls_good) || '目标 ≤0.1' },
+      ]
     },
 
     async loadAudit() {

@@ -22,6 +22,7 @@ import { skillsRoutes } from './interfaces/skills'
 import { landingRoutes } from './interfaces/landing'
 import { contentRoutes } from './interfaces/routes/contents'
 import { GSC_WRITE_SCOPE } from './infrastructure/gsc-sitemap'
+import { startCruxSyncWorker } from './infrastructure/crux-sync'
 import { startGscSyncWorker } from './infrastructure/gsc-sync'
 import { startIndexNowWorker } from './infrastructure/indexnow-dispatcher'
 import { createIndexNotifier } from './infrastructure/prisma-index-notifier'
@@ -262,6 +263,24 @@ async function main(): Promise<void> {
     app.log.info('Search Console 自动同步已启用（每站每天提交 sitemap 并回读搜索表现）')
   } else {
     app.log.warn('未配置 GSC_SERVICE_ACCOUNT，搜索表现数据只能手动同步')
+  }
+
+  // Core Web Vitals：读 Google CrUX 的真实用户数据。
+  // 平台自己测不出 LCP/INP/CLS——那需要真实浏览器渲染真实页面，
+  // 我们只收到一份 HTML 文本。CrUX 免费且数据为真，是唯一不编数字的路。
+  const cruxKey = process.env.CRUX_API_KEY
+  if (cruxKey) {
+    const stopCrux = startCruxSyncWorker({
+      prisma,
+      apiKey: cruxKey,
+      onError: (siteId, origin, error) => {
+        app.log.warn({ siteId, origin, error }, 'CrUX 同步失败')
+      },
+    })
+    app.addHook('onClose', async () => stopCrux())
+    app.log.info('Core Web Vitals 同步已启用（每站每天回读一次 CrUX）')
+  } else {
+    app.log.info('未配置 CRUX_API_KEY，不采集 Core Web Vitals')
   }
 
   await app.listen({ port: env.PORT, host: '0.0.0.0' })

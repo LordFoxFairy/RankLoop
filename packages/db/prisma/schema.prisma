@@ -141,6 +141,7 @@ model Site {
   indexNowKey IndexNowKey?
   indexNowSubmissions IndexNowSubmission[]
   searchAnalytics SearchAnalytics[]
+  webVitals       WebVitals[]
   gscSyncJobs GscSyncJob[]
 
   @@unique([workspaceId, origin])
@@ -296,6 +297,51 @@ model SearchAnalytics {
   @@index([siteId, date])
   @@index([siteId, query])
   @@map("search_analytics")
+}
+
+/**
+ * Core Web Vitals：来自 Google CrUX 的真实用户体验数据。
+ *
+ * 不是我们测出来的——LCP/INP/CLS 必须由真实浏览器渲染真实页面才能得到，
+ * 平台只收到一份 HTML 文本，自测不出来。CrUX 汇总的是真实 Chrome 用户，
+ * 也正是 Google 排名时参考的那一份。
+ *
+ * 关键：CrUX 对样本量不足的页面返回 404，这是常态而非故障——
+ * 新站点会持续数月拿不到数据。因此这张表允许「有记录但指标为空」，
+ * 用 hasData 区分「没同步过」和「同步了但 Google 没数据」，
+ * 否则面板无法如实说明原因，只能显示一堆 0 让人误以为性能极差。
+ */
+model WebVitals {
+  id         String   @id @default(uuid()) @db.Uuid
+  siteId     String   @map("site_id") @db.Uuid
+  /** 查询粒度：origin 为整站汇总，url 为单页 */
+  scope      String   @default("origin")
+  /** scope=url 时的具体地址；origin 粒度用空串，理由同 SearchAnalytics */
+  url        String   @default("")
+  /** 设备形态：PHONE / DESKTOP / ALL */
+  formFactor String   @default("ALL") @map("form_factor")
+  date       DateTime @db.Date
+
+  /** Google 是否有足够样本。false 时下面的指标全为 null */
+  hasData    Boolean  @default(false) @map("has_data")
+
+  /** p75 值：Google 判定「好/需改进/差」用的就是 75 分位 */
+  lcpP75     Float?   @map("lcp_p75")
+  inpP75     Float?   @map("inp_p75")
+  clsP75     Float?   @map("cls_p75")
+
+  /** 处于「好」区间的流量占比，0–1；用于展示分布而非只看一个数 */
+  lcpGood    Float?   @map("lcp_good")
+  inpGood    Float?   @map("inp_good")
+  clsGood    Float?   @map("cls_good")
+
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  site       Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@unique([siteId, scope, url, formFactor, date], name: "unique_vitals")
+  @@index([siteId, date])
+  @@map("web_vitals")
 }
 
 /** 同步任务记录：游标、时间范围、错误与配额状态 */

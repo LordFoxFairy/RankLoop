@@ -165,6 +165,81 @@ export async function statsRoutes(app: FastifyInstance, prisma: PrismaClient): P
   })
 
   /**
+   * Core Web Vitals：真实用户体验数据，来自 Google CrUX。
+   *
+   * 这些值平台测不出来——LCP/INP/CLS 要真实浏览器渲染真实页面，
+   * 我们只收到一份 HTML。CrUX 汇总真实 Chrome 用户，也是 Google
+   * 排名时参考的同一份数据。
+   *
+   * 三种状态必须能区分，否则面板会撒谎：
+   *   未配置 API Key → configured:false
+   *   配置了但 Google 样本不足 → has_data:false（新站常态，可能持续数月）
+   *   有数据 → has_data:true
+   * 把后两者混为一谈，就只能显示一排 0，让人以为性能极差。
+   */
+  app.get('/stats/vitals', { preHandler: requireScope('analytics:read') }, async (req, reply) => {
+    const { workspaceId } = req.auth!
+    const siteScope = req.user?.isPlatformAdmin ? {} : { workspaceId }
+
+    const sites = await prisma.site.findMany({
+      where: { ...siteScope, archivedAt: null },
+      select: { id: true },
+    })
+
+    const configured = Boolean(process.env.CRUX_API_KEY)
+    if (sites.length === 0) {
+      return reply.send({
+        data: { configured, synced: false, has_data: false, sites: [] },
+        meta: { request_id: req.id },
+      })
+    }
+
+    // 每站取最近一条（按天写入，取最新即当前状态）
+    const rows = await prisma.webVitals.findMany({
+      where: { siteId: { in: sites.map((s) => s.id) }, scope: 'origin' },
+      orderBy: { date: 'desc' },
+      take: 50,
+      select: {
+        siteId: true,
+        date: true,
+        hasData: true,
+        lcpP75: true,
+        inpP75: true,
+        clsP75: true,
+        lcpGood: true,
+        inpGood: true,
+        clsGood: true,
+        site: { select: { origin: true } },
+      },
+    })
+
+    const latest = new Map<string, (typeof rows)[number]>()
+    for (const r of rows) if (!latest.has(r.siteId)) latest.set(r.siteId, r)
+    const list = [...latest.values()]
+    const withData = list.filter((r) => r.hasData)
+
+    return reply.send({
+      data: {
+        configured,
+        // 同步过就是 true，哪怕 Google 没数据——这与「没数据」是两回事
+        synced: list.length > 0,
+        has_data: withData.length > 0,
+        checked_at: list[0]?.date ?? null,
+        sites: withData.map((r) => ({
+          origin: r.site.origin,
+          lcp_p75: r.lcpP75,
+          inp_p75: r.inpP75,
+          cls_p75: r.clsP75,
+          lcp_good: r.lcpGood,
+          inp_good: r.inpGood,
+          cls_good: r.clsGood,
+        })),
+      },
+      meta: { request_id: req.id },
+    })
+  })
+
+  /**
    * 分数趋势：按天聚合，供面板画折线。
    *
    * 每天取「该内容当天最后一次检测」再求均值，而非把当天所有检测
