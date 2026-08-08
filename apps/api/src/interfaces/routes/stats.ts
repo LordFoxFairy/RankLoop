@@ -184,24 +184,28 @@ export async function statsRoutes(app: FastifyInstance, prisma: PrismaClient): P
         },
       })
 
-      // 先按「日期 + 内容」折叠，保留当天最后一次检测
-      const perDayContent = new Map<string, { score: number; critical: number }>()
-      for (const c of checks) {
-        const day = c.createdAt.toISOString().slice(0, 10)
-        perDayContent.set(`${day}|${c.version.contentId}`, {
-          score: c.score,
-          critical: c.criticalCount,
-        })
-      }
-
+      // 每天取「所有内容截至当天的最新分数」求均值，而不是只算当天动过的。
+      // 只算当天动过的会让曲线反映「今天碰了哪些内容」而非站点整体质量——
+      // 8 篇里只重发 1 篇 82 分，当天均分就会掉成 82，与总览的 98 自相矛盾。
+      const latest = new Map<string, { score: number; critical: number }>()
       const byDay = new Map<string, { total: number; count: number; critical: number }>()
-      for (const [key, v] of perDayContent) {
-        const day = key.split('|')[0]
-        const entry = byDay.get(day) ?? { total: 0, count: 0, critical: 0 }
-        entry.total += v.score
-        entry.count += 1
-        entry.critical += v.critical
-        byDay.set(day, entry)
+
+      // checks 已按 createdAt 升序，逐日推进即可维护「截至当天」的快照
+      const days_ = [...new Set(checks.map((c) => c.createdAt.toISOString().slice(0, 10)))].sort()
+      let i = 0
+      for (const day of days_) {
+        while (i < checks.length && checks[i].createdAt.toISOString().slice(0, 10) <= day) {
+          const c = checks[i]
+          latest.set(c.version.contentId, { score: c.score, critical: c.criticalCount })
+          i++
+        }
+        let total = 0
+        let critical = 0
+        for (const v of latest.values()) {
+          total += v.score
+          critical += v.critical
+        }
+        byDay.set(day, { total, count: latest.size, critical })
       }
 
       return reply.send({
