@@ -174,7 +174,7 @@ Google 官方文档写明「不保证抓取、索引或提供你的页面」，
 零依赖（只用标准库），把「发布被拦截」做成可直接读取的异常：
 
 ```bash
-pip install rankloop
+pip install "git+https://github.com/LordFoxFairy/RankLoop.git#subdirectory=sdk/python"
 ```
 
 ```python

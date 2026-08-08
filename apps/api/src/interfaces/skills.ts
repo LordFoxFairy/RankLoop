@@ -122,10 +122,8 @@ export function renderSkills(ruleCount: number): string {
   url: '/skills',
 }).replace(/</g, '\\u003c')}</script>
 <style>
-:root{color-scheme:light dark;--fg:#0d1117;--bg:#fff;--muted:#5b6472;--line:#e6e9ee;
+:root{color-scheme:light;--fg:#0d1117;--bg:#fff;--muted:#5b6472;--line:#e6e9ee;
  --surface:#f7f8fa;--accent:#1a5fd0;--ok:#067647;--warn:#b54708;--max:900px}
-@media(prefers-color-scheme:dark){:root{--fg:#e8ebf0;--bg:#0c0f14;--muted:#9aa4b2;
- --line:#232833;--surface:#131720;--accent:#5b9bf8}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);
  font:16px/1.7 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
@@ -216,7 +214,7 @@ POST /api/v1/contents/{contentId}/publish</pre></div>
 
 <h2>用 Python SDK 更省事</h2>
 <p class="intro">零依赖，把「被门槛拦截」做成可直接读取的异常。</p>
-<pre>pip install rankloop</pre>
+<pre>pip install "git+https://github.com/LordFoxFairy/RankLoop.git#subdirectory=sdk/python"</pre>
 <pre>from rankloop import Client
 
 client = Client(api_key="rkl_live_xxx")

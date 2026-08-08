@@ -3,8 +3,10 @@
 SEO 全生命周期平台的 Python 客户端。**零依赖**，只用标准库。
 
 ```bash
-pip install rankloop
+pip install "git+https://github.com/LordFoxFairy/RankLoop.git#subdirectory=sdk/python"
 ```
+
+> 尚未发布到 PyPI，因此从仓库安装。发布后可直接 `pip install rankloop`。
 
 ## 快速开始
 

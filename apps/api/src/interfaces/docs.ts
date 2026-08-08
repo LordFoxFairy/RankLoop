@@ -114,10 +114,8 @@ export function renderDocs(ruleCount: number): string {
   url: '/docs',
 }).replace(/</g, '\\u003c')}</script>
 <style>
-:root{color-scheme:light dark;--fg:#0d1117;--bg:#fff;--muted:#5b6472;--line:#e6e9ee;
+:root{color-scheme:light;--fg:#0d1117;--bg:#fff;--muted:#5b6472;--line:#e6e9ee;
  --surface:#f7f8fa;--accent:#1a5fd0;--ok:#067647;--warn:#b54708;--crit:#b42318;--max:900px}
-@media(prefers-color-scheme:dark){:root{--fg:#e8ebf0;--bg:#0c0f14;--muted:#9aa4b2;
- --line:#232833;--surface:#131720;--accent:#5b9bf8}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);
  font:16px/1.7 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
@@ -178,7 +176,36 @@ footer a{color:var(--muted);text-decoration:none;margin-left:18px}
     把内容推送到平台，拿到 ${ruleCount} 条规则的检测结果，修复后重新提交并发布。
   </p>
 
-  <h2>三步接入</h2>
+  <h2>Python SDK（推荐）</h2>
+  <p class="intro">零依赖，只用标准库。把「发布被拦截」做成可直接读取的异常，
+  不必自己解析 422 的 JSON。</p>
+
+  <div class="step">
+    <h3>安装并接入</h3>
+    <p>需要管理员签发的 API Key（<code>rkl_live_</code> 开头）。
+    客户无需登录控制台，拿到密钥即可调用。</p>
+    <pre>pip install "git+https://github.com/LordFoxFairy/RankLoop.git#subdirectory=sdk/python"</pre>
+    <pre>from rankloop import Client, PublishBlockedError
+
+client = Client(api_key="rkl_live_xxx")
+content = client.submit(site_id, path="/posts/hello", body=html)
+
+try:
+    client.publish(content.id)
+except PublishBlockedError as e:
+    print(f"当前 {e.score} 分，必须先修：{e.blocking}")</pre>
+  </div>
+
+  <div class="step">
+    <h3>批量场景</h3>
+    <p>不想为每条内容写 try/except 时，用 <code>publish_when_ready</code>
+    取回待修复项，每项都带修复建议与预估耗时。</p>
+    <pre>ok, todo = client.publish_when_ready(content.id)
+for r in todo:
+    print(r.message, r.recommendation, f"约 {r.minutes} 分钟")</pre>
+  </div>
+
+  <h2>三步接入（直接调用 HTTP）</h2>
 
   <div class="step">
     <h3>1 · 获取 API Key</h3>

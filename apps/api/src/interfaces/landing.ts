@@ -129,14 +129,11 @@ export function renderLanding(data: LandingData): string {
 }).replace(/</g, '\\u003c')}</script>
 <style>
 :root{
-  color-scheme:light dark;
+  color-scheme:light;
   --fg:#0d1117;--bg:#fff;--muted:#5b6472;--line:#e6e9ee;--surface:#f7f8fa;
   --accent:#1a5fd0;--accent-fg:#fff;--ok:#067647;--warn:#b54708;--crit:#b42318;
   --max:1120px;
 }
-@media(prefers-color-scheme:dark){:root{
-  --fg:#e8ebf0;--bg:#0c0f14;--muted:#9aa4b2;--line:#232833;--surface:#131720;--accent:#5b9bf8;
-}}
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
 body{margin:0;background:var(--bg);color:var(--fg);
