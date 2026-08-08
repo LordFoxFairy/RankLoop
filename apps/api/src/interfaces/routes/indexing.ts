@@ -134,7 +134,9 @@ export async function indexingRoutes(app: FastifyInstance, prisma: PrismaClient)
         },
       })
 
-      // 队列消费者尚未实现：如实返回 queued，不伪造成功（规格 §0 第 10 条）
+      // 入库即返回 queued，实际投递由后台 worker 异步完成——
+      // 外部 HTTP 不应阻塞业务请求（规格 §3.7）。投递结果可查
+      // GET /sites/:siteId/indexnow/submissions。
       return reply.code(202).send({
         data: {
           id: submission.id,

@@ -94,6 +94,9 @@ model Session {
   @@map("sessions")
 }
 
+/// 邀请码。当前**未接线**：平台不开放自助注册，账号由管理员创建，
+/// 租户凭签发的 API Key 调用接口，无需登录，因此没有邀请流程。
+/// 保留表结构是为将来支持多人协作工作区时不必再做迁移。
 model Invitation {
   id          String        @id @default(uuid()) @db.Uuid
   workspaceId String        @map("workspace_id") @db.Uuid
