@@ -210,16 +210,25 @@ code{font-family:var(--mono);font-size:12px;background:var(--paper);
 .hd-v{font-size:13px;font-weight:640;font-family:var(--mono);
   font-variant-numeric:tabular-nums}
 .hd-note{font-size:12.5px;color:var(--muted);padding:10px 0}
-.legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:9px}
-.lg{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted)}
-.lg b{font-family:var(--mono);color:var(--text);font-weight:640}
+/* 图例：色点 + 名称 + 右对齐数值 + 占比。
+   参考 Ahrefs 分布图：数值右对齐成列才能纵向比较。
+   每行自身是四列网格并铺满分布条宽度——图例窄于条会让两者读起来
+   像不相干的两个控件；数字则始终贴着自己那一行的右端，不会飘远。 */
+.legend{display:flex;flex-direction:column;gap:5px;margin-top:11px}
+.lg{display:grid;grid-template-columns:8px 1fr auto 40px;gap:9px;align-items:center}
+.lg .lg-name{font-size:12.5px;color:var(--muted)}
+.lg .lg-n{font-family:var(--mono);color:var(--text);font-weight:640;
+  font-size:12.5px;text-align:right;font-variant-numeric:tabular-nums}
+.lg .lg-pct{font-family:var(--mono);color:var(--faint);font-size:11.5px;
+  text-align:right;font-variant-numeric:tabular-nums}
 .dot{width:8px;height:8px;border-radius:50%;display:inline-block}
 .d-excellent{background:var(--gain)}
 .d-good{background:#5aa06f}
 .d-fair{background:var(--warn)}
 .d-poor{background:var(--blocked)}
 @media(max-width:720px){.hero-health{grid-template-columns:1fr;gap:18px;text-align:center}
-  .legend{justify-content:center}}
+  /* 窄屏下图例回到左对齐：整卡居中，但数字列仍需成列，居中会打乱对齐 */
+  .legend{text-align:left}}
 
 /* 问题分组：阻断发布与可选优化在视觉上必须一眼分得开 */
 .issue-group + .issue-group{border-top:1px solid var(--line)}

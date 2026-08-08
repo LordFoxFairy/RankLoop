@@ -116,11 +116,17 @@ const HTML = String.raw`<!doctype html>
                 <span class="hd-v" x-text="(stats.contents?.total ?? 0)+' 篇'"></span>
               </div>
               <div x-html="distributionBar()"></div>
+              <!-- 图例三列对齐：色点 + 名称 + 右对齐数值。
+                   参考 Ahrefs 的分布图，数字纵向对齐才能快速扫读比较 -->
               <div class="legend">
                 <template x-for="b in (stats.distribution || []).filter(x=>x.count)" :key="b.band">
-                  <span class="lg"><i :class="'dot d-'+b.band"></i>
-                    <span x-text="b.label"></span>
-                    <b x-text="b.count"></b></span>
+                  <div class="lg">
+                    <i :class="'dot d-'+b.band"></i>
+                    <span class="lg-name" x-text="b.label"></span>
+                    <b class="lg-n" x-text="b.count"></b>
+                    <span class="lg-pct"
+                          x-text="Math.round(b.count/(stats.contents?.total||1)*100)+'%'"></span>
+                  </div>
                 </template>
               </div>
 
