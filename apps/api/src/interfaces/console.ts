@@ -108,7 +108,12 @@ const HTML = String.raw`<!doctype html>
           <!-- 健康分主视觉：参考 Ahrefs Site Audit，环形比数字更快传达
                「距离满分还差多少」；旁边配分布与走势，避免均值掩盖分化 -->
           <div class="hero-health">
-            <div class="ring-wrap" x-html="heroRing(stats.health?.average_score, '132px')"></div>
+            <div class="ring-wrap">
+              <div x-html="heroRing(stats.health?.average_score, '100%')"></div>
+              <!-- 环里只有一个数字没有语义，标明这是什么分、跨多少内容算的 -->
+              <div class="ring-cap">平均健康分<br>
+                <span x-text="'按 '+(stats.contents?.total ?? 0)+' 篇内容计'"></span></div>
+            </div>
 
             <div class="health-detail">
               <div class="hd-row">
@@ -813,7 +818,8 @@ function app() {
       const prev = t.length >= 2 ? t[t.length - 2].average_score : null
       const delta = prev === null || score === null || score === undefined
         ? null : score - prev
-      return '<svg viewBox="0 0 100 100" style="width:' + size + ';height:' + size + '" ' +
+      // 高度由 viewBox 比例推出，不写死：写 height:100% 时在纵向 flex 容器里会塌陷
+      return '<svg viewBox="0 0 100 100" style="width:' + size + ';height:auto;display:block" ' +
         'role="img" aria-label="健康分 ' + (score ?? '暂无') + '">' +
         '<circle cx="50" cy="50" r="' + r + '" fill="none" stroke="var(--line)" stroke-width="9"/>' +
         (score === null || score === undefined ? '' :
@@ -835,11 +841,14 @@ function app() {
             ' ' + px.toFixed(1) + ' ' + py.toFixed(1) + ')">' +
             '<title>上次 ' + prev + ' 分</title></polygon>'
         })()) +
-        '<text x="50" y="' + (delta === null ? 52 : 48) + '" text-anchor="middle" ' +
+        // 分数字号 30 时 bbox 高约 35 单位（含 ascent/descent，远大于字形本身），
+        // 居中于 y=45 底部落在约 60；说明文字基线取 70 才不会压上去。
+        // 这两个数是量出来的，改字号必须重量，不能凭字号推。
+        '<text x="50" y="45" text-anchor="middle" ' +
         'dominant-baseline="middle" font-size="30" font-weight="700" fill="' + col + '" ' +
         'font-family="ui-monospace,monospace">' + (score ?? '—') + '</text>' +
         // 分数下方直接说明变化，不必另找地方看趋势（Semrush 的「no changes」）
-        '<text x="50" y="64" text-anchor="middle" font-size="8.5" ' +
+        '<text x="50" y="70" text-anchor="middle" font-size="8.5" ' +
         'fill="' + (delta === null || delta === 0 ? 'var(--muted)' :
                     delta > 0 ? 'var(--gain)' : 'var(--blocked)') + '">' +
         (delta === null ? '满分 100' : delta === 0 ? '较上次无变化' :

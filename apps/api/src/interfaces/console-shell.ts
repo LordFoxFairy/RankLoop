@@ -197,13 +197,18 @@ code{font-family:var(--mono);font-size:12px;background:var(--paper);
   font-size:13px;line-height:1.65}
 .ob-now b{color:var(--accent)}
 
-/* 健康分主视觉：环形 + 分布 + 走势并排，参考 Ahrefs Site Audit 概览 */
-.hero-health{display:grid;grid-template-columns:auto 1fr;gap:34px;align-items:center;
+/* 健康分主视觉：环形 + 分布 + 走势并排，参考 Ahrefs Site Audit 概览。
+   环所在列固定 176px，比右侧内容矮时靠内容撑高——Semrush/Ahrefs 都让
+   分数成为视觉锚点，环若只有 132px 而右列 285px，环会浮在大片空白里。 */
+.hero-health{display:grid;grid-template-columns:176px 1fr;gap:34px;align-items:stretch;
   background:var(--surface);border-radius:16px;box-shadow:var(--shadow);
   padding:26px 30px;margin-bottom:20px}
-.ring-wrap{flex:none;display:flex;align-items:center;justify-content:center;
-  width:132px;height:132px}
-.ring-wrap svg{width:100%;height:100%}
+/* 环纵向居中于整列，并随列高适度放大，消除上下各百余像素的死区 */
+.ring-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:9px;width:176px}
+.ring-wrap svg{width:100%;height:auto;max-width:176px}
+/* 环下方的标题：单独一个「49」没有语义，读者不知道这是什么分 */
+.ring-cap{font-size:12.5px;color:var(--muted);text-align:center;line-height:1.4}
 .health-detail{min-width:0}
 .hd-row{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px}
 .hd-k{font-size:12.5px;color:var(--muted)}
