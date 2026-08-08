@@ -101,6 +101,70 @@ server {
 
 使用 1Panel 时，在面板中反代到 `127.0.0.1:8080` 即可。
 
+## 租户站点域名与证书
+
+租户内容通过 `<slug>.rankloop.<你的域名>` 对外，例如
+`acme.rankloop.example.com`。DNS 只需一条通配符：
+
+```
+*.rankloop.example.com   A   <服务器 IP>   (DNS-only，不走代理)
+```
+
+**不要用一级通配符 `*.example.com`**——它会接管该域名下所有未显式配置的
+子域名，你以后新建任何服务在配好 DNS 之前都会被误导向租户渲染。
+把租户收拢在 `rankloop.` 命名空间下，代价只是域名长一点。
+
+### 证书
+
+Cloudflare 免费版的通用证书**只覆盖一级子域名**，
+`*.rankloop.example.com` 这样的二级通配符会握手失败
+（`ERR_SSL_VERSION_OR_CIPHER_MISMATCH`）。用 Let's Encrypt 自行签发：
+
+```bash
+curl https://get.acme.sh | sh -s email=you@example.com
+
+# DNS-01 验证需要 Cloudflare API Token（权限：Zone:DNS:Edit）
+export CF_Token='<你的 token>'
+export CF_Zone_ID='<zone id>'
+
+~/.acme.sh/acme.sh --issue --dns dns_cf \
+  -d 'rankloop.example.com' -d '*.rankloop.example.com' \
+  --server letsencrypt --keylength ec-256
+
+# 安装到 Nginx 并配置自动续期后重载
+~/.acme.sh/acme.sh --install-cert -d rankloop.example.com --ecc \
+  --fullchain-file /path/to/ssl/fullchain.pem \
+  --key-file /path/to/ssl/privkey.pem \
+  --reloadcmd "nginx -s reload"
+```
+
+acme.sh 会自动续期，无需人工维护。
+
+DNS 记录必须设为 **DNS-only（灰云）**：走 Cloudflare 代理时边缘会用它自己的
+证书，而那张证书不覆盖二级子域名。
+
+### Nginx
+
+```nginx
+server {
+    listen 443 ssl;
+    http2 on;
+    # 只匹配 rankloop 命名空间，不要用能匹配所有子域名的正则
+    server_name ~^[a-z0-9-]+\.rankloop\.example\.com$;
+
+    ssl_certificate     /path/to/ssl/fullchain.pem;
+    ssl_certificate_key /path/to/ssl/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;   # 应用按 Host 决定渲染哪个租户
+    }
+}
+```
+
+`PLATFORM_DOMAIN` 需与之一致（如 `rankloop.example.com`），
+应用据此从 Host 解析租户 slug，并生成 canonical 与 sitemap 地址。
+
 ## 升级与回滚
 
 ```bash

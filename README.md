@@ -130,6 +130,8 @@ docker compose exec api node /app/seed.mjs   # 输出 API Key，只显示一次
 - **Webhook 投递**：HMAC 签名、指数退避重试、4xx 不重试 5xx 重试、SSRF 防护
 - 发布即自动通知搜索引擎（无需客户再调一次提交接口）
 - API Key 认证与 scope 授权、多租户隔离
+- 多租户按 Host 渲染：`<slug>.rankloop.<平台域名>`，
+  自有域名验证归属后优先生效（配置见 [DEPLOY.md](DEPLOY.md#租户站点域名与证书)）
 - 首次启动自动创建平台管理员（幂等，已存在时不覆盖）
 - 管理控制台 + 可视化面板
 - 站点与 API Key 管理接口
