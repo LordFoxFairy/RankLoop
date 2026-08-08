@@ -35,9 +35,13 @@ services:
       DEFAULT_MAX_CONTENTS: ${DEFAULT_MAX_CONTENTS:-1000}
       DEFAULT_DAILY_INDEXNOW: ${DEFAULT_DAILY_INDEXNOW:-200}
       DEFAULT_MAX_WEBHOOKS: ${DEFAULT_MAX_WEBHOOKS:-10}
-    # 只绑定回环地址，由反代对外暴露（规格 §12.3）
+    # 只绑定回环地址，由反代对外暴露（规格 §12.3）。
+    # 宿主端口可覆盖：部署机上 8080 已被既有服务（sub2api）占用，
+    # 硬编码 8080 会让容器起不来。生产用 HOST_PORT=8082，
+    # 与 OpenResty 里 tenant-sites.conf 的 proxy_pass 172.17.0.1:8082 对应——
+    # 两处必须同时改，否则租户站点 502。
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:${HOST_PORT:-8080}:8080"
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
