@@ -309,3 +309,60 @@ describe('NO_EXTERNAL_REFERENCES', () => {
     expect(issues.find((i) => i.code === 'NO_EXTERNAL_REFERENCES')).toBeUndefined()
   })
 })
+
+describe('MIXED_CONTENT', () => {
+  it('HTTPS 页面引用 http 图片时报警', () => {
+    // 浏览器会去掉锁标甚至拦截，页面在用户眼里就是坏的
+    const issues = runRules(
+      doc({
+        url: 'https://example.com/article',
+        body: {
+          headings: [{ level: 1, text: '如何优化网站的搜索引擎排名' }],
+          images: [{ src: 'http://cdn.example.org/a.png', alt: '示意图' }],
+          links: [{ href: 'https://developers.google.com/search', internal: false, text: '文档' }],
+          text: '优化网站的搜索引擎排名需要从标题、描述与内链三方面入手。'.repeat(30),
+        },
+      }),
+    ).issues
+    const hit = issues.find((i) => i.code === 'MIXED_CONTENT')
+    expect(hit).toBeDefined()
+    expect(hit!.evidence).toContain('http://cdn.example.org/a.png')
+  })
+
+  it('协议相对地址不算混合内容', () => {
+    // //host/x 会跟随页面协议，在 https 页面上本就是 https，报出来是误判
+    const issues = runRules(
+      doc({
+        url: 'https://example.com/article',
+        body: {
+          headings: [{ level: 1, text: '如何优化网站的搜索引擎排名' }],
+          images: [{ src: '//cdn.example.org/a.png', alt: '示意图' }],
+          links: [{ href: 'https://developers.google.com/search', internal: false, text: '文档' }],
+          text: '优化网站的搜索引擎排名需要从标题、描述与内链三方面入手。'.repeat(30),
+        },
+      }),
+    ).issues
+    expect(issues.find((i) => i.code === 'MIXED_CONTENT')).toBeUndefined()
+  })
+
+  it('http 页面引用 http 资源不算混合内容', () => {
+    // 那是「整站没上 HTTPS」，是另一个问题，不该由这条规则报
+    const issues = runRules(
+      doc({
+        url: 'http://example.com/article',
+        body: {
+          headings: [{ level: 1, text: '如何优化网站的搜索引擎排名' }],
+          images: [{ src: 'http://cdn.example.org/a.png', alt: '示意图' }],
+          links: [{ href: 'https://developers.google.com/search', internal: false, text: '文档' }],
+          text: '优化网站的搜索引擎排名需要从标题、描述与内链三方面入手。'.repeat(30),
+        },
+      }),
+    ).issues
+    expect(issues.find((i) => i.code === 'MIXED_CONTENT')).toBeUndefined()
+  })
+
+  it('全 https 资源时不报', () => {
+    const issues = runRules(doc()).issues
+    expect(issues.find((i) => i.code === 'MIXED_CONTENT')).toBeUndefined()
+  })
+})

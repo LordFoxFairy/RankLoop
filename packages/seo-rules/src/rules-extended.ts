@@ -346,4 +346,40 @@ export const extendedRules: Rule[] = [
       }
     },
   },
+  {
+    /**
+     * 混合内容：HTTPS 页面里引用了 http:// 资源。
+     *
+     * 这是「HTTPS 实现」这一类里唯一能从文档模型判定的问题，
+     * 也是后果最直接的：浏览器对图片这类被动混合内容会降级显示、
+     * 去掉地址栏的锁标；对脚本样式这类主动混合内容直接拦截不加载。
+     * 页面看起来是坏的，用户会走，这比任何排名因素都致命。
+     *
+     * 只在页面本身是 https 时才判定——http 页面引用 http 资源不算混合内容，
+     * 那是另一个问题（整站没上 HTTPS），不该在这里报。
+     */
+    code: 'MIXED_CONTENT',
+    severity: 'warning',
+    weight: 10,
+    evaluate(doc) {
+      if (!doc.url.startsWith('https://')) return null
+
+      const insecure = [
+        ...doc.body.images.map((i) => i.src),
+        // 只看 http:// 开头的绝对地址：协议相对（//host/x）会跟随页面协议，
+        // 在 https 页面上是安全的，报出来是误判。
+      ].filter((u) => u.toLowerCase().startsWith('http://'))
+
+      if (insecure.length === 0) return null
+
+      const shown = insecure.slice(0, 3).join('、')
+      const more = insecure.length > 3 ? ` 等 ${insecure.length} 个` : ''
+      return {
+        message: 'HTTPS 页面引用了 http:// 资源，浏览器会拦截或降级显示',
+        evidence: `${shown}${more}`,
+        recommendation:
+          '把这些地址改成 https://（或去掉协议写成 //），确保资源本身支持 HTTPS。',
+      }
+    },
+  },
 ]

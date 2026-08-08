@@ -9,7 +9,7 @@ SEO 全生命周期管理平台。平台托管内容并执行 SEO 规则检测�
 
 ```text
 第三方 POST 内容
-  → 平台跑 29 条 SEO 规则
+  → 平台跑 30 条 SEO 规则
   → 返回不合格项（规则编码 + 证据 + 修复建议 + 预估耗时 + 可挽回分数）
   → 第三方自行优化后 PUT 更新
   → 重新检测（可多轮迭代）
@@ -56,7 +56,7 @@ API Token 在 [Cloudflare 控制台](https://dash.cloudflare.com/profile/api-tok
 
 ```bash
 # 1. 在 content/ 下新增 Markdown
-# 2. 提交 PR → 自动跑 29 条 SEO 检测，不合格无法合并
+# 2. 提交 PR → 自动跑 30 条 SEO 检测，不合格无法合并
 # 3. 合并 → 自动构建、部署 Pages、提交搜索引擎
 ```
 
@@ -116,7 +116,7 @@ docker compose exec api node /app/seed.mjs   # 输出 API Key，只显示一次
 已实现：
 
 - 内容托管 CRUD，支持 HTML 与 Markdown 两种格式
-- **29 条 SEO 规则**，分 critical / warning / notice 三级
+- **30 条 SEO 规则**，分 critical / warning / notice 三级
 - 可解释健康分（按规则权重扣分，可追溯每一分的来源）
 - 发布门槛：critical 问题阻断发布
 - 无状态预检接口（不落库，供发布前反复试算）
@@ -205,7 +205,7 @@ for r in todo:
 
 | 方法 | 路径 | scope | 说明 |
 | --- | --- | --- | --- |
-| GET | `/rules` | 公开 | 29 条规则清单与权重 |
+| GET | `/rules` | 公开 | 30 条规则清单与权重 |
 | GET | `/openapi.json` | 公开 | OpenAPI 3.1 文档 |
 | POST | `/sites/:siteId/contents` | `contents:write` | 提交内容并检测 |
 | GET | `/sites/:siteId/contents` | `contents:read` | 列出站点内容 |

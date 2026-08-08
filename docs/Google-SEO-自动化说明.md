@@ -62,7 +62,7 @@ IndexNow 协议的参与方是 **Bing、Yandex、Seznam、Naver**。
 
 | 环节 | 能否自动化 | RankLoop 实现 |
 | --- | --- | --- |
-| 发布前拦截 SEO 缺陷 | ✅ | 29 条规则，critical 阻断发布 |
+| 发布前拦截 SEO 缺陷 | ✅ | 30 条规则，critical 阻断发布 |
 | 生成合规 HTML（title/description/canonical/OG/JSON-LD） | ✅ | 静态站生成器 |
 | 生成并更新 sitemap | ✅ | 每次构建自动生成 |
 | robots.txt 声明 sitemap | ✅ | 自动生成 |
