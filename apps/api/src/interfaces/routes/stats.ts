@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@prisma/client'
 import { listRules } from '@rankloop/seo-rules'
 import type { FastifyInstance } from 'fastify'
+import { compareSearchPeriods } from '../../domain/insight/search-trend'
 import { aggregateTopIssues } from '../../domain/insight/top-issues'
 import { requireScope } from '../../lib/auth'
 
@@ -126,6 +127,9 @@ export async function statsRoutes(app: FastifyInstance, prisma: PrismaClient): P
       prisma.searchAnalytics.aggregate({
         where: { siteId: { in: siteIds }, date: { gte: prevSince, lt: since } },
         _sum: { clicks: true, impressions: true },
+        // 排名同样要环比：Google 明确建议盯「流量下滑」，
+        // 而排名恶化通常早于点击下滑出现，只看点击会晚一步才发现。
+        _avg: { position: true },
       }),
       prisma.gscSyncJob.findFirst({
         where: { siteId: { in: siteIds } },
@@ -134,21 +138,24 @@ export async function statsRoutes(app: FastifyInstance, prisma: PrismaClient): P
       }),
     ])
 
-    const clicks = current._sum.clicks ?? 0
-    const impressions = current._sum.impressions ?? 0
-    const prevClicks = previous._sum.clicks ?? 0
+    // 环比口径（CTR 用百分点、排名方向相反等）住在领域层，由测试钉死
+    const comparison = compareSearchPeriods(
+      {
+        clicks: current._sum.clicks ?? 0,
+        impressions: current._sum.impressions ?? 0,
+        position: current._avg.position ?? 0,
+      },
+      {
+        clicks: previous._sum.clicks ?? 0,
+        impressions: previous._sum.impressions ?? 0,
+        position: previous._avg.position ?? 0,
+      },
+    )
 
     return reply.send({
       data: {
         period_days: days,
-        clicks,
-        impressions,
-        // CTR 按汇总值算，平均每日 CTR 会失真
-        ctr: impressions > 0 ? Number((clicks / impressions).toFixed(4)) : 0,
-        position: Number((current._avg.position ?? 0).toFixed(1)),
-        clicks_change: clicks - prevClicks,
-        clicks_change_pct:
-          prevClicks > 0 ? Number((((clicks - prevClicks) / prevClicks) * 100).toFixed(1)) : null,
+        ...comparison,
         // 有没有同步过，决定前端显示「等待数据」还是「尚未配置」
         synced: Boolean(lastSync),
         last_sync_at: lastSync?.startedAt ?? null,

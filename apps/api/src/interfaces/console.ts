@@ -206,17 +206,33 @@ const HTML = String.raw`<!doctype html>
               <div class="ss-grid">
                 <div class="ss"><div class="ss-k">点击</div>
                   <div class="ss-v" x-text="searchSummary.clicks"></div>
-                  <template x-if="searchSummary.clicks_change_pct !== null">
+                  <template x-if="searchSummary.clicks_change_pct">
                     <div class="ss-d" :style="'color:'+(searchSummary.clicks_change>=0?'var(--gain)':'var(--blocked)')"
                          x-text="(searchSummary.clicks_change>=0?'↑':'↓')+' '+Math.abs(searchSummary.clicks_change_pct)+'%'"></div>
                   </template></div>
                 <div class="ss"><div class="ss-k">曝光</div>
-                  <div class="ss-v" x-text="searchSummary.impressions"></div></div>
+                  <div class="ss-v" x-text="searchSummary.impressions"></div>
+                  <!-- 0% 不显示：没变化就别摆一个箭头，那是噪声不是信息 -->
+                  <template x-if="searchSummary.impressions_change_pct">
+                    <div class="ss-d" :style="'color:'+(searchSummary.impressions_change>=0?'var(--gain)':'var(--blocked)')"
+                         x-text="(searchSummary.impressions_change>=0?'↑':'↓')+' '+Math.abs(searchSummary.impressions_change_pct)+'%'"></div>
+                  </template></div>
                 <div class="ss"><div class="ss-k">点击率</div>
-                  <div class="ss-v" x-text="(searchSummary.ctr*100).toFixed(2)+'%'"></div></div>
+                  <div class="ss-v" x-text="(searchSummary.ctr*100).toFixed(2)+'%'"></div>
+                  <!-- 百分点而非百分比：2%→3% 是 +1pp，说 +50% 会误导 -->
+                  <template x-if="searchSummary.ctr_change_pp !== null && searchSummary.ctr_change_pp !== 0">
+                    <div class="ss-d" :style="'color:'+(searchSummary.ctr_change_pp>0?'var(--gain)':'var(--blocked)')"
+                         x-text="(searchSummary.ctr_change_pp>0?'↑ +':'↓ ')+searchSummary.ctr_change_pp+'pp'"></div>
+                  </template></div>
                 <div class="ss"><div class="ss-k">平均排名</div>
                   <div class="ss-v" :style="'color:'+posColor(searchSummary.position)"
-                       x-text="searchSummary.position || '—'"></div></div>
+                       x-text="searchSummary.position || '—'"></div>
+                  <!-- 排名越小越好：差值为负=名次前进，配色必须反过来，
+                       否则「从 12 名掉到 30 名」会显示成绿色 -->
+                  <template x-if="searchSummary.position_change !== null && searchSummary.position_change !== 0">
+                    <div class="ss-d" :style="'color:'+(searchSummary.position_change<0?'var(--gain)':'var(--blocked)')"
+                         x-text="(searchSummary.position_change<0?'↑ 前进 ':'↓ 后退 ')+Math.abs(searchSummary.position_change)+' 位'"></div>
+                  </template></div>
               </div>
             </template>
             <template x-if="!searchSummary || (!searchSummary.clicks && !searchSummary.impressions)">
@@ -451,18 +467,33 @@ const HTML = String.raw`<!doctype html>
               <div class="metrics">
                 <div class="metric"><div class="k">点击</div>
                   <div class="v" x-text="perf.clicks"></div>
-                  <div class="d" x-show="perf.change?.clicks_pct !== null"
+                  <div class="d" x-show="perf.change?.clicks_pct"
                        :style="'color:'+(perf.change?.clicks>=0?'var(--gain)':'var(--blocked)')"
                        x-text="(perf.change?.clicks>=0?'↑ ':'↓ ')+Math.abs(perf.change?.clicks)+' ('+perf.change?.clicks_pct+'%)'"></div>
                 </div>
                 <div class="metric"><div class="k">曝光</div>
-                  <div class="v" x-text="perf.impressions"></div></div>
+                  <div class="v" x-text="perf.impressions"></div>
+                  <!-- 曝光下滑常早于点击下滑，是排名恶化的前兆 -->
+                  <div class="d" x-show="perf.change?.impressions_pct"
+                       :style="'color:'+(perf.change?.impressions>=0?'var(--gain)':'var(--blocked)')"
+                       x-text="(perf.change?.impressions>=0?'↑ ':'↓ ')+Math.abs(perf.change?.impressions)+' ('+perf.change?.impressions_pct+'%)'"></div>
+                </div>
                 <div class="metric"><div class="k">点击率</div>
-                  <div class="v" x-text="(perf.ctr*100).toFixed(2)+'%'"></div></div>
+                  <div class="v" x-text="(perf.ctr*100).toFixed(2)+'%'"></div>
+                  <!-- 百分点差：2%→3% 是 +1pp，写成 +50% 会被当成流量涨了一半 -->
+                  <div class="d" x-show="perf.change?.ctr_pp"
+                       :style="'color:'+(perf.change?.ctr_pp>0?'var(--gain)':'var(--blocked)')"
+                       x-text="(perf.change?.ctr_pp>0?'↑ +':'↓ ')+perf.change?.ctr_pp+'pp'"></div>
+                </div>
                 <div class="metric"><div class="k">平均排名</div>
                   <div class="v" :style="'color:'+posColor(perf.position)"
                        x-text="perf.position || '—'"></div>
-                  <div class="d" x-show="perf.position" x-text="rankHint(perf.position)"></div></div>
+                  <!-- 排名越小越好：差值为负=前进，配色与其他指标相反 -->
+                  <div class="d" x-show="perf.change?.position"
+                       :style="'color:'+(perf.change?.position<0?'var(--gain)':'var(--blocked)')"
+                       x-text="(perf.change?.position<0?'↑ 前进 ':'↓ 后退 ')+Math.abs(perf.change?.position)+' 位'"></div>
+                  <div class="d" x-show="perf.position && !perf.change?.position"
+                       x-text="rankHint(perf.position)"></div></div>
               </div>
 
               <template x-if="perf.note">

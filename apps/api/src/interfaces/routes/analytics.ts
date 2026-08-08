@@ -2,6 +2,7 @@ import type { PrismaClient } from '@prisma/client'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { annotateTrend, periodDelta } from '../../domain/insight/publish-events'
+import { compareSearchPeriods } from '../../domain/insight/search-trend'
 import { listAudit } from '../../infrastructure/audit'
 import { dailyTotals, gscSiteUrl, syncSite, topKeywords } from '../../infrastructure/gsc-sync'
 import { requireScope } from '../../lib/auth'
@@ -86,22 +87,35 @@ export async function analyticsRoutes(
         }),
       ])
 
-      const clicks = current._sum.clicks ?? 0
-      const impressions = current._sum.impressions ?? 0
-      const prevClicks = previous._sum.clicks ?? 0
+      // 与总览用同一套环比口径，避免两个页面对同一批数据给出不同结论
+      const cmp = compareSearchPeriods(
+        {
+          clicks: current._sum.clicks ?? 0,
+          impressions: current._sum.impressions ?? 0,
+          position: current._avg.position ?? 0,
+        },
+        {
+          clicks: previous._sum.clicks ?? 0,
+          impressions: previous._sum.impressions ?? 0,
+          position: previous._avg.position ?? 0,
+        },
+      )
 
       return reply.send({
         data: {
           period_days: days,
-          clicks,
-          impressions,
-          // CTR 按汇总值计算，直接平均每日 CTR 会失真
-          ctr: impressions > 0 ? Number((clicks / impressions).toFixed(4)) : 0,
-          position: Number((current._avg.position ?? 0).toFixed(1)),
+          clicks: cmp.clicks,
+          impressions: cmp.impressions,
+          ctr: cmp.ctr,
+          position: cmp.position,
           change: {
-            clicks: clicks - prevClicks,
-            clicks_pct:
-              prevClicks > 0 ? Number((((clicks - prevClicks) / prevClicks) * 100).toFixed(1)) : null,
+            clicks: cmp.clicks_change,
+            clicks_pct: cmp.clicks_change_pct,
+            impressions: cmp.impressions_change,
+            impressions_pct: cmp.impressions_change_pct,
+            ctr_pp: cmp.ctr_change_pp,
+            // 负数=名次前进；调用方不要套用「正数=好」的通用规则
+            position: cmp.position_change,
           },
           last_sync: lastSync
             ? {
@@ -113,7 +127,7 @@ export async function analyticsRoutes(
             : null,
           // 无数据时如实说明原因，而非显示 0 让人误以为没流量
           note:
-            clicks === 0 && impressions === 0
+            cmp.clicks === 0 && cmp.impressions === 0
               ? lastSync
                 ? 'Search Console 尚无该区间数据。新站点通常需要数周才开始有展现。'
                 : '尚未同步过 Search Console 数据，请先调用同步接口。'
