@@ -596,7 +596,18 @@ const HTML = String.raw`<!doctype html>
         <div>
           <div class="toolbar">
             <input placeholder="密钥名称" x-model="form.keyName">
-            <button class="btn pri" @click="createKey()">创建密钥</button>
+            <!-- 平台管理员自己不属于任何工作区，必须先选租户，
+                 否则后端拿不到有效 workspaceId，建不出密钥 -->
+            <template x-if="me?.is_platform_admin">
+              <select x-model="form.keyWorkspaceId">
+                <option value="">选择租户…</option>
+                <template x-for="t in tenants" :key="t.id">
+                  <option :value="t.id" x-text="t.name"></option>
+                </template>
+              </select>
+            </template>
+            <button class="btn pri" @click="createKey()"
+                    :disabled="me?.is_platform_admin && !form.keyWorkspaceId">创建密钥</button>
           </div>
           <template x-if="newKey">
             <div class="banner ok">新密钥（仅显示一次）：<code x-text="newKey"></code></div>
@@ -842,7 +853,8 @@ function app() {
     domainOpen: false, domainSite: null, domainInfo: null,
     versionsOpen: false, versions: [],
     form: { email: '', password: '', tenantName: '', tenantSlug: '', siteName: '', siteOrigin: '',
-            siteId: '', path: '', format: 'markdown', body: '', keyName: '', domain: '' },
+            siteId: '', path: '', format: 'markdown', body: '', keyName: '',
+            keyWorkspaceId: '', domain: '' },
 
     async api(path, opts = {}) {
       // 会话走 HttpOnly Cookie；只在真的有 body 时才带 Content-Type，
@@ -1403,10 +1415,19 @@ function app() {
     async createKey() {
       this.error = ''; this.newKey = ''
       try {
-        const ws = this.me?.workspaces?.[0]
-        if (!ws) { this.error = '当前账号没有工作区'; return }
-        const d = await this.api('/me/api-keys', { method: 'POST',
-          body: JSON.stringify({ workspaceId: ws.id, name: this.form.keyName || 'console key' }) })
+        // 平台管理员通常不属于任何工作区（只管理不使用），必须显式指定租户，
+        // 否则后端拿到的是一个不存在的 workspaceId，写库会撞外键。
+        // 普通成员走 /api-keys，工作区由会话推导。
+        const name = this.form.keyName || 'console key'
+        const scopes = ['sites:read', 'contents:read', 'contents:write',
+          'contents:publish', 'issues:read', 'indexing:read',
+          'indexing:write', 'analytics:read']
+        const ws = this.form.keyWorkspaceId
+        const d = ws
+          ? await this.api('/admin/tenants/' + ws + '/keys',
+              { method: 'POST', body: JSON.stringify({ name }) })
+          : await this.api('/api-keys',
+              { method: 'POST', body: JSON.stringify({ name, scopes }) })
         this.newKey = d.api_key
         this.form.keyName = ''
         this.keys = await this.api('/api-keys')

@@ -172,6 +172,24 @@ export async function siteRoutes(app: FastifyInstance, prisma: PrismaClient): Pr
     const parsed = schema.safeParse(req.body)
     if (!parsed.success) throw badRequest(parsed.error.issues)
 
+    // 平台管理员可能不属于任何工作区（只管理不使用），此时 auth.workspaceId
+    // 是一个刻意构造的不存在 UUID——对查询是对的（返回空结果），
+    // 但拿去写入会撞外键约束，直接抛 500。必须先确认工作区真实存在，
+    // 并告诉调用方该走哪个接口，否则控制台点「新建密钥」只会看到「服务器内部错误」。
+    const workspace = await prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { id: true },
+    })
+    if (!workspace) {
+      throw new ApiError(
+        400,
+        'NO_WORKSPACE',
+        '当前账号不属于任何工作区，无法在此创建密钥。' +
+          '平台管理员请改用 POST /admin/tenants/{workspaceId}/keys 为指定租户发放。',
+        {},
+      )
+    }
+
     const generated = generateApiKey()
     const key = await prisma.apiKey.create({
       data: {
